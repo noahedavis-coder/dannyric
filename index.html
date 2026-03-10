@@ -1,0 +1,1828 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>F1 Fantasy League</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg-primary: #15151e;
+  --bg-secondary: #1e1e2a;
+  --bg-card: #242434;
+  --bg-input: #2c2c3e;
+  --red: #e10600;
+  --red-hover: #ff1801;
+  --red-dark: #a00400;
+  --text-primary: #e6e6e6;
+  --text-secondary: #9ca3af;
+  --text-muted: #6b7280;
+  --border: #38384a;
+  --gold: #ffd700;
+  --silver: #c0c0c0;
+  --bronze: #cd7f32;
+  --green: #22c55e;
+  --yellow: #eab308;
+  --radius: 4px;
+  --font: 'Arial Black', 'Helvetica Neue', Arial, sans-serif;
+  --font-body: 'Helvetica Neue', Arial, sans-serif;
+}
+
+body {
+  font-family: var(--font-body);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+  line-height: 1.5;
+  letter-spacing: 0.01em;
+}
+
+/* OVERLAYS */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--bg-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.overlay.hidden { display: none; }
+
+.overlay-inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 40px;
+  width: 100%;
+  max-width: 1100px;
+  padding: 0 20px;
+}
+
+.overlay-photo {
+  flex: 0 0 200px;
+  height: 260px;
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.overlay-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+  border-radius: var(--radius);
+}
+
+.overlay-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--red);
+  border-radius: var(--radius);
+  padding: 32px;
+  width: 100%;
+  max-width: 400px;
+  flex-shrink: 0;
+}
+
+.overlay-card .logo {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 900px) {
+  .overlay-photo { display: none; }
+  .overlay-inner { padding: 0 16px; }
+}
+
+/* HEADER */
+header {
+  background: var(--bg-secondary);
+  border-bottom: none;
+  padding: 14px 20px 0;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 20px rgba(0,0,0,0.5);
+}
+
+header::after {
+  content: '';
+  display: block;
+  height: 3px;
+  background: linear-gradient(90deg, var(--red) 0%, var(--red) 40%, transparent 100%);
+  margin-top: 0;
+}
+
+.header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.logo {
+  font-family: var(--font);
+  font-size: 1.4rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.logo span { color: var(--red); }
+.logo img { height: 36px; border-radius: 50%; object-fit: cover; border: 2px solid var(--red); }
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+nav {
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+nav::-webkit-scrollbar { display: none; }
+
+.tab {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  padding: 10px 16px;
+  font-family: var(--font);
+  font-size: 0.75rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  white-space: nowrap;
+  border-bottom: 3px solid transparent;
+  transition: color 0.2s, border-color 0.2s;
+}
+.tab:hover { color: var(--text-primary); }
+.tab.active { color: #fff; border-bottom-color: var(--red); }
+
+/* MAIN */
+main {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px 16px;
+}
+
+.page { display: none; }
+.page.active { display: block; }
+
+h2 {
+  font-family: var(--font);
+  font-size: 1.25rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 16px;
+}
+h3 {
+  font-family: var(--font);
+  font-size: 0.85rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 12px;
+  color: var(--text-secondary);
+}
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+  border-left: 3px solid transparent;
+}
+.card:hover { border-left-color: var(--red); }
+
+/* TABLE */
+table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+th {
+  font-family: var(--font);
+  color: var(--text-muted);
+  font-weight: 900;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  user-select: none;
+  border-bottom: 2px solid var(--red);
+}
+th:hover { color: var(--text-primary); }
+tr:last-child td { border-bottom: none; }
+.rank-1 { color: var(--gold); font-weight: 700; }
+.rank-2 { color: var(--silver); font-weight: 700; }
+.rank-3 { color: var(--bronze); font-weight: 700; }
+
+/* FORMS */
+input, select {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  width: 100%;
+  transition: border-color 0.2s;
+}
+input:focus, select:focus { outline: none; border-color: var(--red); box-shadow: 0 0 0 2px rgba(225, 6, 0, 0.15); }
+select { cursor: pointer; }
+label {
+  display: block;
+  font-family: var(--font);
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+  font-weight: 900;
+}
+
+/* BUTTONS */
+.btn {
+  background: var(--red);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: var(--radius);
+  font-family: var(--font);
+  font-size: 0.75rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+.btn:hover { background: var(--red-hover); }
+.btn:active { transform: scale(0.97); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.btn-secondary { background: var(--bg-input); border: 1px solid var(--border); }
+.btn-secondary:hover { background: var(--border); }
+.btn-danger { background: #7f1d1d; }
+.btn-danger:hover { background: #991b1b; }
+.btn-sm { padding: 6px 12px; font-size: 0.7rem; }
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+
+.form-row { display: flex; gap: 12px; align-items: flex-end; margin-bottom: 12px; }
+.form-row > * { flex: 1; }
+.form-group { margin-bottom: 16px; }
+
+/* CHIPS */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px 12px;
+  font-size: 0.8rem;
+  margin: 4px 4px 4px 0;
+}
+.chip button {
+  background: none; border: none; color: var(--text-muted);
+  cursor: pointer; font-size: 1rem; line-height: 1; padding: 0;
+}
+.chip button:hover { color: var(--red); }
+
+/* STATUS BADGES */
+.badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 2px;
+  font-family: var(--font);
+  font-size: 0.6rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.badge-upcoming { background: #1e3a5f; color: #60a5fa; }
+.badge-locked { background: #713f12; color: var(--yellow); }
+.badge-completed { background: #14532d; color: var(--green); }
+
+.points-badge {
+  display: inline-block;
+  background: var(--red);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 2px;
+  font-family: var(--font);
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+.points-zero { background: var(--bg-input); color: var(--text-muted); }
+
+/* STATS */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.stat-box {
+  background: var(--bg-input);
+  border-radius: var(--radius);
+  padding: 16px;
+  text-align: center;
+  border-top: 3px solid var(--red);
+}
+.stat-value {
+  font-family: var(--font);
+  font-size: 1.5rem;
+  font-weight: 900;
+  color: var(--red);
+}
+.stat-label {
+  font-family: var(--font);
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-top: 4px;
+}
+
+/* RACE CARDS */
+.race-card { cursor: pointer; transition: border-left-color 0.2s; }
+.race-card:hover { border-left-color: var(--red); }
+.race-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+.race-date { color: var(--text-muted); font-size: 0.8rem; }
+.race-detail { display: none; margin-top: 16px; border-top: 1px solid var(--border); padding-top: 16px; }
+.race-card.expanded .race-detail { display: block; }
+
+/* PICK CARDS */
+.pick-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--red);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  margin-bottom: 12px;
+}
+.pick-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.pick-card-title {
+  font-family: var(--font);
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.pick-card-subtitle { font-size: 0.8rem; color: var(--text-muted); }
+.pick-saved { color: var(--green); font-size: 0.8rem; font-weight: 700; }
+.pick-carryover { color: var(--yellow); font-size: 0.8rem; font-weight: 700; }
+
+.result-slot { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.result-pos { font-weight: 700; font-size: 0.75rem; color: var(--text-muted); min-width: 28px; }
+.results-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 8px;
+}
+
+.sort-arrow { font-size: 0.7rem; margin-left: 4px; }
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-muted);
+  font-family: var(--font);
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  letter-spacing: 0.05em;
+}
+.hidden { display: none !important; }
+.admin-only { display: none; }
+.loading { text-align: center; padding: 20px; color: var(--text-muted); }
+
+.msg { margin-top: 12px; font-size: 0.875rem; padding: 8px 12px; border-radius: var(--radius); }
+.msg-success { background: #14532d; color: var(--green); }
+.msg-error { background: #7f1d1d; color: #fca5a5; }
+
+@media (max-width: 600px) {
+  .form-row { flex-direction: column; }
+  .stat-grid { grid-template-columns: 1fr 1fr; }
+  table { font-size: 0.8rem; }
+  th, td { padding: 8px 6px; }
+  .tab { padding: 8px 12px; font-size: 0.8rem; }
+  .race-header { flex-direction: column; align-items: flex-start; }
+  .results-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- LOGIN OVERLAY -->
+<div id="login-overlay" class="overlay">
+  <div class="overlay-inner">
+    <div class="overlay-photo">
+      <img src="danny-ric-left.png" alt="Danny Ric">
+    </div>
+    <div class="overlay-card">
+      <div class="logo" style="justify-content:center"><img src="danny-ric.png" alt="Danny Ric"><span>F1</span> Fantasy League</div>
+      <div id="login-form">
+        <div class="form-group">
+          <label>Your Name</label>
+          <select id="login-name"><option value="">Loading...</option></select>
+        </div>
+        <button class="btn" id="login-btn" style="width:100%">Join</button>
+        <div id="login-error" style="color:#ef4444; margin-top:8px; font-size:0.85rem;"></div>
+      </div>
+    </div>
+    <div class="overlay-photo">
+      <img src="danny-ric-right.png" alt="Danny Ric">
+    </div>
+  </div>
+</div>
+
+<!-- SETUP OVERLAY -->
+<div id="setup-overlay" class="overlay hidden">
+  <div class="overlay-card">
+    <div class="logo" style="justify-content:center"><img src="danny-ric.png" alt="Danny Ric"><span>F1</span> Fantasy League</div>
+    <h3 style="text-align:center; margin-bottom:16px;">Create Your League</h3>
+    <div class="form-group">
+      <label>Your Name (League Admin)</label>
+      <input type="text" id="setup-admin-name" placeholder="e.g. Noah">
+    </div>
+    <div class="form-group">
+      <label>Season</label>
+      <select id="setup-season">
+        <option value="2025">2025</option>
+        <option value="2026" selected>2026</option>
+      </select>
+    </div>
+    <button class="btn" id="setup-btn" style="width:100%">Create League</button>
+    <div id="setup-error" style="color:#ef4444; margin-top:8px; font-size:0.85rem;"></div>
+    <div id="setup-status" style="color:var(--text-muted); margin-top:8px; font-size:0.85rem;"></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app" class="hidden">
+<header>
+  <div class="header-top">
+    <div class="logo"><img src="danny-ric.png" alt="Danny Ric"><span>F1</span> Fantasy League</div>
+    <div class="user-info">
+      <span id="user-display-name"></span>
+      <button class="btn btn-sm btn-secondary" id="logout-btn">Logout</button>
+    </div>
+  </div>
+  <nav id="tabs">
+    <button class="tab active" data-page="dashboard">Standings</button>
+    <button class="tab" data-page="my-picks">My Picks</button>
+    <button class="tab" data-page="history">Race History</button>
+    <button class="tab" data-page="stats">Driver Stats</button>
+    <button class="tab admin-only" data-page="admin">Admin</button>
+  </nav>
+</header>
+
+<main>
+  <!-- DASHBOARD -->
+  <div id="page-dashboard" class="page active">
+    <h2>Season Standings</h2>
+    <div class="stat-grid" id="dashboard-stats"></div>
+    <div class="card">
+      <table id="standings-table">
+        <thead>
+          <tr>
+            <th data-sort="rank">#</th>
+            <th data-sort="name">Participant</th>
+            <th data-sort="total">Total Pts <span class="sort-arrow">&#9660;</span></th>
+            <th data-sort="winner">Winner Pts</th>
+            <th data-sort="tenth">10th Pts</th>
+            <th data-sort="races">Races</th>
+          </tr>
+        </thead>
+        <tbody id="standings-body"></tbody>
+      </table>
+      <div id="standings-empty" class="empty-state hidden">No races completed yet.</div>
+    </div>
+  </div>
+
+  <!-- MY PICKS -->
+  <div id="page-my-picks" class="page">
+    <h2>My Picks</h2>
+    <div id="picks-list"></div>
+    <div id="picks-empty" class="empty-state hidden">No upcoming races found.</div>
+  </div>
+
+  <!-- RACE HISTORY -->
+  <div id="page-history" class="page">
+    <h2>Race History</h2>
+    <div id="history-list"></div>
+    <div id="history-empty" class="empty-state hidden">No races recorded yet.</div>
+  </div>
+
+  <!-- DRIVER STATS -->
+  <div id="page-stats" class="page">
+    <h2>Driver Statistics</h2>
+    <div class="card">
+      <table id="stats-table">
+        <thead>
+          <tr>
+            <th>Driver</th>
+            <th>Picked as Winner</th>
+            <th>Picked for 10th</th>
+            <th>Avg Finish</th>
+            <th>Races</th>
+          </tr>
+        </thead>
+        <tbody id="stats-body"></tbody>
+      </table>
+      <div id="stats-empty" class="empty-state hidden">No race data yet.</div>
+    </div>
+  </div>
+
+  <!-- ADMIN -->
+  <div id="page-admin" class="page">
+    <h2>Admin Panel</h2>
+
+    <div class="card">
+      <h3>Participants</h3>
+      <div class="form-row">
+        <div class="form-group" style="margin-bottom:0">
+          <input type="text" id="admin-new-participant" placeholder="Add participant name">
+        </div>
+        <button class="btn btn-sm" id="admin-add-participant">Add</button>
+      </div>
+      <div id="admin-participants-list" style="margin-top:12px"></div>
+    </div>
+
+    <div class="card">
+      <h3>Race Management</h3>
+      <div class="btn-row" style="margin-top:0; margin-bottom:16px;">
+        <button class="btn btn-sm" id="admin-fetch-schedule">Refresh Schedule from API</button>
+      </div>
+      <div id="admin-races-list"></div>
+    </div>
+
+    <div class="card">
+      <h3>Drivers</h3>
+      <div class="form-row">
+        <div class="form-group" style="margin-bottom:0">
+          <input type="text" id="admin-new-driver" placeholder="driver_id:Full Name">
+        </div>
+        <button class="btn btn-sm" id="admin-add-driver">Add</button>
+      </div>
+      <p style="font-size:0.75rem; color:var(--text-muted); margin-top:4px;">Format: driverId:Display Name (e.g. norris:Lando Norris)</p>
+      <div id="admin-drivers-list" style="margin-top:12px"></div>
+    </div>
+
+    <div class="card">
+      <h3>Data Management</h3>
+      <div class="btn-row" style="margin-top:0">
+        <button class="btn btn-secondary btn-sm" id="admin-export">Export JSON</button>
+        <button class="btn btn-danger btn-sm" id="admin-clear-data">Reset League</button>
+      </div>
+    </div>
+  </div>
+</main>
+</div>
+
+<!-- FIREBASE SDK -->
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
+import {
+  getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc,
+  deleteDoc, writeBatch, serverTimestamp, query, orderBy, onSnapshot
+} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+
+// ============================================================
+// FIREBASE CONFIG — Replace with your own Firebase project config
+// ============================================================
+const firebaseConfig = {
+  apiKey: "AIzaSyAKSfSU-n0ZSqCrEb9G7vhDPtpR0eo25PI",
+  authDomain: "dannyric-385d3.firebaseapp.com",
+  projectId: "dannyric-385d3",
+  storageBucket: "dannyric-385d3.firebasestorage.app",
+  messagingSenderId: "568405832705",
+  appId: "1:568405832705:web:0ab62b91344eca2bdefc00",
+  measurementId: "G-NLDHNGCBZJ"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+const LEAGUE_ID = 'default';
+const JOLPICA_BASE = 'https://api.jolpi.ca/ergast/f1';
+
+const WINNER_POINTS = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
+const TENTH_POINTS_MAP = { 9: 10, 10: 8, 11: 6, 12: 4, 13: 2 };
+
+// ============================================================
+// STATE
+// ============================================================
+let session = null;  // { participantId, participantName, isAdmin }
+let leagueData = null; // { pin, adminParticipantId, season, drivers }
+let participants = []; // [{ id, name, isAdmin }]
+let races = [];  // [{ round, raceName, date, time, qualifyingDate, qualifyingTime, status, results }]
+let myPicks = {}; // { round: { winnerPick, tenthPlacePick, carryOver } }
+let allPicks = {}; // { round: { participantId: { winnerPick, tenthPlacePick } } }  — only for completed races
+let unsubscribers = [];
+
+// ============================================================
+// FIRESTORE HELPERS
+// ============================================================
+const leagueRef = () => doc(db, 'leagues', LEAGUE_ID);
+const participantsCol = () => collection(db, 'leagues', LEAGUE_ID, 'participants');
+const participantRef = (id) => doc(db, 'leagues', LEAGUE_ID, 'participants', id);
+const racesCol = () => collection(db, 'leagues', LEAGUE_ID, 'races');
+const raceRef = (round) => doc(db, 'leagues', LEAGUE_ID, 'races', String(round));
+const picksCol = (round) => collection(db, 'leagues', LEAGUE_ID, 'races', String(round), 'picks');
+const pickRef = (round, pid) => doc(db, 'leagues', LEAGUE_ID, 'races', String(round), 'picks', pid);
+
+function slugify(name) {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+}
+
+// ============================================================
+// SCORING
+// ============================================================
+function calcWinnerPoints(driverId, results) {
+  const pos = results.indexOf(driverId);
+  if (pos >= 0 && pos < WINNER_POINTS.length) return WINNER_POINTS[pos];
+  return 0;
+}
+
+function calcTenthPoints(driverId, results) {
+  const pos = results.indexOf(driverId);
+  return TENTH_POINTS_MAP[pos] || 0;
+}
+
+function driverName(driverId) {
+  if (!leagueData?.drivers) return driverId;
+  const d = leagueData.drivers.find(d => d.id === driverId);
+  return d ? d.name : driverId;
+}
+
+// ============================================================
+// JOLPICA API
+// ============================================================
+async function fetchSchedule(season) {
+  const res = await fetch(`${JOLPICA_BASE}/${season}.json`);
+  const json = await res.json();
+  return json.MRData.RaceTable.Races;
+}
+
+async function fetchDriversList(season) {
+  const res = await fetch(`${JOLPICA_BASE}/${season}/drivers.json`);
+  const json = await res.json();
+  return json.MRData.DriverTable.Drivers.map(d => ({
+    id: d.driverId,
+    name: `${d.givenName} ${d.familyName}`
+  }));
+}
+
+async function fetchRaceResults(season, round) {
+  const res = await fetch(`${JOLPICA_BASE}/${season}/${round}/results.json`);
+  const json = await res.json();
+  const raceData = json.MRData.RaceTable.Races[0];
+  if (!raceData?.Results || raceData.Results.length === 0) return null;
+  return raceData.Results
+    .sort((a, b) => parseInt(a.position) - parseInt(b.position))
+    .map(r => r.Driver.driverId);
+}
+
+// ============================================================
+// SETUP WIZARD
+// ============================================================
+async function checkLeagueExists() {
+  try {
+    const snap = await getDoc(leagueRef());
+    return snap.exists();
+  } catch (e) {
+    console.error('Firebase connection error:', e);
+    document.getElementById('login-error').textContent = 'Cannot connect to Firebase. Check your config.';
+    return false;
+  }
+}
+
+async function initSetup() {
+  const exists = await checkLeagueExists();
+  if (!exists) {
+    document.getElementById('login-overlay').classList.add('hidden');
+    document.getElementById('setup-overlay').classList.remove('hidden');
+    return;
+  }
+  await initLogin();
+}
+
+document.getElementById('setup-btn').addEventListener('click', async () => {
+  const adminName = document.getElementById('setup-admin-name').value.trim();
+  const season = parseInt(document.getElementById('setup-season').value);
+
+  if (!adminName) {
+    document.getElementById('setup-error').textContent = 'Please enter your name.';
+    return;
+  }
+
+  const btn = document.getElementById('setup-btn');
+  btn.disabled = true;
+  const statusEl = document.getElementById('setup-status');
+
+  try {
+    statusEl.textContent = 'Fetching driver list...';
+    let drivers;
+    try {
+      drivers = await fetchDriversList(season);
+    } catch (e) {
+      drivers = await fetchDriversList(2025);
+    }
+
+    const adminId = slugify(adminName);
+
+    statusEl.textContent = 'Creating league...';
+    await setDoc(leagueRef(), {
+      adminParticipantId: adminId,
+      season,
+      drivers,
+      createdAt: serverTimestamp()
+    });
+
+    await setDoc(participantRef(adminId), {
+      name: adminName,
+      isAdmin: true,
+      joinedAt: serverTimestamp()
+    });
+
+    statusEl.textContent = 'Fetching race schedule...';
+    try {
+      const apiRaces = await fetchSchedule(season);
+      const batch = writeBatch(db);
+      for (const race of apiRaces) {
+        batch.set(raceRef(race.round), {
+          round: parseInt(race.round),
+          raceName: race.raceName,
+          circuitName: race.Circuit.circuitName,
+          locality: race.Circuit.Location.locality,
+          country: race.Circuit.Location.country,
+          date: race.date,
+          time: race.time || null,
+          qualifyingDate: race.Qualifying?.date || null,
+          qualifyingTime: race.Qualifying?.time || null,
+          sprintDate: race.Sprint?.date || null,
+          sprintTime: race.Sprint?.time || null,
+          status: 'upcoming',
+          results: [],
+          createdAt: serverTimestamp()
+        });
+      }
+      await batch.commit();
+    } catch (e) {
+      statusEl.textContent = 'Schedule fetch failed — you can add races manually.';
+      console.error(e);
+    }
+
+    session = { participantId: adminId, participantName: adminName, isAdmin: true };
+    sessionStorage.setItem('f1_session', JSON.stringify(session));
+
+    document.getElementById('setup-overlay').classList.add('hidden');
+    await startApp();
+  } catch (e) {
+    document.getElementById('setup-error').textContent = 'Error: ' + e.message;
+    btn.disabled = false;
+  }
+});
+
+// ============================================================
+// LOGIN
+// ============================================================
+async function initLogin() {
+  const existing = sessionStorage.getItem('f1_session');
+  if (existing) {
+    try {
+      session = JSON.parse(existing);
+      const leagueSnap = await getDoc(leagueRef());
+      if (leagueSnap.exists()) {
+        leagueData = leagueSnap.data();
+        await startApp();
+        return;
+      }
+    } catch (e) { /* fall through to login */ }
+  }
+
+  // Populate participants dropdown
+  const snap = await getDocs(participantsCol());
+  const sel = document.getElementById('login-name');
+  sel.innerHTML = '<option value="">Select your name...</option>';
+  snap.forEach(doc => {
+    sel.innerHTML += `<option value="${doc.id}">${esc(doc.data().name)}</option>`;
+  });
+}
+
+document.getElementById('login-btn').addEventListener('click', async () => {
+  const pid = document.getElementById('login-name').value;
+
+  if (!pid) {
+    document.getElementById('login-error').textContent = 'Please select your name.';
+    return;
+  }
+
+  try {
+    const leagueSnap = await getDoc(leagueRef());
+    if (!leagueSnap.exists()) return;
+    const league = leagueSnap.data();
+
+    const pSnap = await getDoc(participantRef(pid));
+    if (!pSnap.exists()) {
+      document.getElementById('login-error').textContent = 'Participant not found.';
+      return;
+    }
+
+    const pData = pSnap.data();
+    session = {
+      participantId: pid,
+      participantName: pData.name,
+      isAdmin: pData.isAdmin || pid === league.adminParticipantId
+    };
+    sessionStorage.setItem('f1_session', JSON.stringify(session));
+    leagueData = league;
+    await startApp();
+  } catch (e) {
+    document.getElementById('login-error').textContent = 'Connection error: ' + e.message;
+  }
+});
+
+// ============================================================
+// APP INITIALIZATION
+// ============================================================
+async function startApp() {
+  document.getElementById('login-overlay').classList.add('hidden');
+  document.getElementById('setup-overlay').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+
+  document.getElementById('user-display-name').textContent = session.participantName;
+
+  if (session.isAdmin) {
+    document.querySelectorAll('.admin-only').forEach(el => el.classList.remove('admin-only'));
+  }
+
+  // Load data
+  if (!leagueData) {
+    const snap = await getDoc(leagueRef());
+    leagueData = snap.data();
+  }
+
+  await loadParticipants();
+  await loadRaces();
+  await loadMyPicks();
+
+  // Set up real-time listeners
+  setupListeners();
+
+  // Check for auto-lock and auto-fetch results
+  await checkAutoLock();
+  await checkAutoFetchResults();
+  setInterval(() => checkAutoLock(), 60000);
+  setInterval(() => checkAutoFetchResults(), 300000); // check every 5 min
+
+  renderCurrentPage('dashboard');
+}
+
+async function loadParticipants() {
+  const snap = await getDocs(participantsCol());
+  participants = [];
+  snap.forEach(d => participants.push({ id: d.id, ...d.data() }));
+}
+
+async function loadRaces() {
+  const snap = await getDocs(query(racesCol(), orderBy('round')));
+  races = [];
+  snap.forEach(d => races.push({ id: d.id, ...d.data() }));
+}
+
+async function loadMyPicks() {
+  myPicks = {};
+  for (const race of races) {
+    try {
+      const snap = await getDoc(pickRef(race.round, session.participantId));
+      if (snap.exists()) {
+        myPicks[race.round] = snap.data();
+      }
+    } catch (e) { /* skip */ }
+  }
+}
+
+async function loadAllPicksForRace(round) {
+  const snap = await getDocs(picksCol(round));
+  const picks = {};
+  snap.forEach(d => { picks[d.id] = d.data(); });
+  allPicks[round] = picks;
+  return picks;
+}
+
+function setupListeners() {
+  // Cleanup old listeners
+  unsubscribers.forEach(fn => fn());
+  unsubscribers = [];
+
+  // Listen to races for status changes
+  const unsub = onSnapshot(query(racesCol(), orderBy('round')), (snapshot) => {
+    races = [];
+    snapshot.forEach(d => races.push({ id: d.id, ...d.data() }));
+    const activePage = document.querySelector('.tab.active')?.dataset.page;
+    if (activePage) renderCurrentPage(activePage);
+  });
+  unsubscribers.push(unsub);
+}
+
+// ============================================================
+// AUTO-LOCK + CARRY OVER
+// ============================================================
+const LOCK_HOURS_BEFORE_RACE = 24;
+
+async function checkAutoLock() {
+  const now = new Date();
+  for (const race of races) {
+    if (race.status !== 'upcoming') continue;
+    if (!race.date) continue;
+
+    // Lock picks 24 hours before race start
+    const raceStart = new Date(race.date + 'T' + (race.time || '00:00:00Z'));
+    const lockTime = new Date(raceStart.getTime() - LOCK_HOURS_BEFORE_RACE * 60 * 60 * 1000);
+
+    if (now >= lockTime) {
+      try {
+        await updateDoc(raceRef(race.round), { status: 'locked', lockedAt: serverTimestamp() });
+        await carryOverPicks(race.round);
+      } catch (e) {
+        console.error('Auto-lock error for round', race.round, e);
+      }
+    }
+  }
+}
+
+async function carryOverPicks(round) {
+  const roundNum = typeof round === 'string' ? parseInt(round) : round;
+  // Find previous race round
+  const sortedRaces = [...races].sort((a, b) => a.round - b.round);
+  const idx = sortedRaces.findIndex(r => r.round === roundNum);
+  if (idx <= 0) return;  // No previous race
+
+  const prevRound = sortedRaces[idx - 1].round;
+
+  // Get all existing picks for this round
+  const existingSnap = await getDocs(picksCol(round));
+  const existingPids = new Set();
+  existingSnap.forEach(d => existingPids.add(d.id));
+
+  // Get previous round picks
+  const prevSnap = await getDocs(picksCol(prevRound));
+  const batch = writeBatch(db);
+  let carried = 0;
+
+  prevSnap.forEach(d => {
+    if (!existingPids.has(d.id)) {
+      const prev = d.data();
+      batch.set(pickRef(round, d.id), {
+        participantId: prev.participantId,
+        winnerPick: prev.winnerPick,
+        tenthPlacePick: prev.tenthPlacePick,
+        submittedAt: serverTimestamp(),
+        carryOver: true
+      });
+      carried++;
+    }
+  });
+
+  if (carried > 0) await batch.commit();
+}
+
+// ============================================================
+// AUTO-FETCH RESULTS (5 hours after race start)
+// ============================================================
+async function checkAutoFetchResults() {
+  const now = new Date();
+  for (const race of races) {
+    if (race.status !== 'locked') continue;
+    if (!race.date || !race.time) continue;
+
+    const raceStart = new Date(race.date + 'T' + race.time);
+    const fetchAfter = new Date(raceStart.getTime() + 5 * 60 * 60 * 1000); // 5 hours later
+
+    if (now >= fetchAfter) {
+      try {
+        const results = await fetchRaceResults(leagueData.season, race.round);
+        if (results && results.length > 0) {
+          await updateDoc(raceRef(race.round), {
+            results,
+            status: 'completed',
+            completedAt: serverTimestamp()
+          });
+          console.log(`Auto-fetched results for Round ${race.round}`);
+        }
+      } catch (e) {
+        console.log(`Results not yet available for Round ${race.round}`);
+      }
+    }
+  }
+}
+
+// ============================================================
+// TAB NAVIGATION
+// ============================================================
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    const page = tab.dataset.page;
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.page === page));
+    document.querySelectorAll('.page').forEach(p => p.classList.toggle('active', p.id === `page-${page}`));
+    renderCurrentPage(page);
+  });
+});
+
+function renderCurrentPage(pageName) {
+  switch (pageName) {
+    case 'dashboard': renderDashboard(); break;
+    case 'my-picks': renderMyPicks(); break;
+    case 'history': renderHistory(); break;
+    case 'stats': renderStats(); break;
+    case 'admin': renderAdmin(); break;
+  }
+}
+
+// ============================================================
+// DASHBOARD / STANDINGS
+// ============================================================
+let standingsSort = { key: 'total', dir: 'desc' };
+
+async function renderDashboard() {
+  const completedRaces = races.filter(r => r.status === 'completed');
+
+  // Load all picks for completed races
+  for (const race of completedRaces) {
+    if (!allPicks[race.round]) {
+      await loadAllPicksForRace(race.round);
+    }
+  }
+
+  // Calculate scores
+  const scores = {};
+  participants.forEach(p => {
+    scores[p.id] = { name: p.name, total: 0, winner: 0, tenth: 0, races: 0 };
+  });
+
+  completedRaces.forEach(race => {
+    if (!race.results?.length) return;
+    const racePicks = allPicks[race.round] || {};
+    Object.entries(racePicks).forEach(([pid, pick]) => {
+      if (!scores[pid]) return;
+      const wp = calcWinnerPoints(pick.winnerPick, race.results);
+      const tp = calcTenthPoints(pick.tenthPlacePick, race.results);
+      scores[pid].winner += wp;
+      scores[pid].tenth += tp;
+      scores[pid].total += wp + tp;
+      scores[pid].races++;
+    });
+  });
+
+  const totalRaces = completedRaces.length;
+  const entries = Object.entries(scores);
+  const leader = entries.sort((a, b) => b[1].total - a[1].total)[0];
+
+  document.getElementById('dashboard-stats').innerHTML = `
+    <div class="stat-box"><div class="stat-value">${totalRaces}</div><div class="stat-label">Races</div></div>
+    <div class="stat-box"><div class="stat-value">${participants.length}</div><div class="stat-label">Participants</div></div>
+    <div class="stat-box"><div class="stat-value">${leader ? esc(leader[1].name) : '—'}</div><div class="stat-label">Current Leader</div></div>
+    <div class="stat-box"><div class="stat-value">${leader ? leader[1].total : 0}</div><div class="stat-label">Top Score</div></div>
+  `;
+
+  const tbody = document.getElementById('standings-body');
+  const emptyEl = document.getElementById('standings-empty');
+
+  if (participants.length === 0 || totalRaces === 0) {
+    tbody.innerHTML = '';
+    emptyEl.classList.remove('hidden');
+    return;
+  }
+  emptyEl.classList.add('hidden');
+
+  let rows = Object.values(scores);
+  rows.sort((a, b) => {
+    const dir = standingsSort.dir === 'desc' ? -1 : 1;
+    if (standingsSort.key === 'name') return dir * a.name.localeCompare(b.name) * -1;
+    return dir * (a[standingsSort.key] - b[standingsSort.key]);
+  });
+  rows.forEach((r, i) => r.rank = i + 1);
+
+  tbody.innerHTML = rows.map(r => {
+    const rc = r.rank <= 3 ? ` class="rank-${r.rank}"` : '';
+    return `<tr><td${rc}>${r.rank}</td><td${rc}>${esc(r.name)}</td><td><strong>${r.total}</strong></td><td>${r.winner}</td><td>${r.tenth}</td><td>${r.races}</td></tr>`;
+  }).join('');
+
+  document.querySelectorAll('#standings-table th').forEach(th => {
+    const arrow = th.querySelector('.sort-arrow');
+    if (arrow) arrow.remove();
+    if (th.dataset.sort === standingsSort.key) {
+      th.insertAdjacentHTML('beforeend', `<span class="sort-arrow">${standingsSort.dir === 'desc' ? '▼' : '▲'}</span>`);
+    }
+  });
+}
+
+document.querySelectorAll('#standings-table th[data-sort]').forEach(th => {
+  th.addEventListener('click', () => {
+    const key = th.dataset.sort;
+    if (standingsSort.key === key) standingsSort.dir = standingsSort.dir === 'desc' ? 'asc' : 'desc';
+    else { standingsSort.key = key; standingsSort.dir = key === 'name' ? 'asc' : 'desc'; }
+    renderDashboard();
+  });
+});
+
+// ============================================================
+// MY PICKS
+// ============================================================
+async function renderMyPicks() {
+  const container = document.getElementById('picks-list');
+  const emptyEl = document.getElementById('picks-empty');
+
+  // Refresh own picks
+  await loadMyPicks();
+
+  // Only show the next race (first upcoming or locked race)
+  const allUpcoming = races.filter(r => r.status === 'upcoming' || r.status === 'locked')
+    .sort((a, b) => {
+      if (a.date && b.date) return a.date.localeCompare(b.date);
+      return a.round - b.round;
+    });
+
+  const upcomingAndLocked = allUpcoming.length > 0 ? [allUpcoming[0]] : [];
+
+  if (upcomingAndLocked.length === 0) {
+    container.innerHTML = '';
+    emptyEl.classList.remove('hidden');
+    return;
+  }
+  emptyEl.classList.add('hidden');
+
+  const drivers = leagueData?.drivers || [];
+
+  container.innerHTML = upcomingAndLocked.map(race => {
+    const pick = myPicks[race.round];
+    const isLocked = race.status === 'locked';
+    const statusBadge = isLocked
+      ? '<span class="badge badge-locked">Locked</span>'
+      : '<span class="badge badge-upcoming">Open</span>';
+
+    const raceDate = race.date ? new Date(race.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : '';
+    const qualiInfo = race.qualifyingDate ? `Qualifying: ${new Date(race.qualifyingDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}` : '';
+
+    let pickStatus = '';
+    if (pick) {
+      pickStatus = pick.carryOver
+        ? '<span class="pick-carryover">Carried from previous race</span>'
+        : '<span class="pick-saved">Picks saved</span>';
+    }
+
+    const driverOpts = drivers.map(d =>
+      `<option value="${d.id}">${esc(d.name)}</option>`
+    ).join('');
+
+    if (isLocked) {
+      return `<div class="pick-card">
+        <div class="pick-card-header">
+          <div>
+            <div class="pick-card-title">${esc(race.raceName)}</div>
+            <div class="pick-card-subtitle">${raceDate} ${statusBadge}</div>
+          </div>
+          ${pickStatus}
+        </div>
+        <div style="display:flex; gap:24px; flex-wrap:wrap;">
+          <div><label>Winner Pick</label><strong>${pick ? esc(driverName(pick.winnerPick)) : '—'}</strong></div>
+          <div><label>10th Place Pick</label><strong>${pick ? esc(driverName(pick.tenthPlacePick)) : '—'}</strong></div>
+        </div>
+      </div>`;
+    }
+
+    return `<div class="pick-card">
+      <div class="pick-card-header">
+        <div>
+          <div class="pick-card-title">${esc(race.raceName)}</div>
+          <div class="pick-card-subtitle">${raceDate} &middot; ${qualiInfo} ${statusBadge}</div>
+        </div>
+        ${pickStatus}
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="margin-bottom:0">
+          <label>Winner Pick</label>
+          <select id="pick-w-${race.round}">
+            <option value="">-- Select driver --</option>
+            ${driverOpts}
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label>10th Place Pick</label>
+          <select id="pick-t-${race.round}">
+            <option value="">-- Select driver --</option>
+            ${driverOpts}
+          </select>
+        </div>
+        <button class="btn btn-sm" data-save-round="${race.round}">Save</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Set existing pick values
+  upcomingAndLocked.forEach(race => {
+    const pick = myPicks[race.round];
+    if (pick && race.status === 'upcoming') {
+      const ws = document.getElementById(`pick-w-${race.round}`);
+      const ts = document.getElementById(`pick-t-${race.round}`);
+      if (ws) ws.value = pick.winnerPick || '';
+      if (ts) ts.value = pick.tenthPlacePick || '';
+    }
+  });
+
+  // Attach save handlers
+  container.querySelectorAll('[data-save-round]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const round = parseInt(btn.dataset.saveRound);
+      const wSel = document.getElementById(`pick-w-${round}`);
+      const tSel = document.getElementById(`pick-t-${round}`);
+      const w = wSel?.value;
+      const t = tSel?.value;
+
+      if (!w || !t) { alert('Please select both picks.'); return; }
+
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+      try {
+        await setDoc(pickRef(round, session.participantId), {
+          participantId: session.participantId,
+          participantName: session.participantName,
+          winnerPick: w,
+          tenthPlacePick: t,
+          submittedAt: serverTimestamp(),
+          carryOver: false
+        });
+        myPicks[round] = { winnerPick: w, tenthPlacePick: t, carryOver: false };
+        btn.textContent = 'Saved!';
+        const phrases = [
+          'those picks are a first-turn wreck',
+          'you\'re sure to see the checked flag!',
+          'will buxton should be in prison. love these picks, though.',
+          'yuki approves.',
+          'drs activated!!!',
+          'vroom. vroom.'
+        ];
+        const vroomEl = document.createElement('div');
+        vroomEl.textContent = phrases[Math.floor(Math.random() * phrases.length)];
+        vroomEl.style.cssText = 'color: var(--green); font-size: 0.9rem; font-weight: 600; margin-top: 8px; text-align: center;';
+        btn.parentElement.appendChild(vroomEl);
+        setTimeout(() => { btn.textContent = 'Save'; btn.disabled = false; vroomEl.remove(); }, 2500);
+      } catch (e) {
+        alert('Error saving: ' + e.message);
+        btn.textContent = 'Save';
+        btn.disabled = false;
+      }
+    });
+  });
+}
+
+// ============================================================
+// RACE HISTORY
+// ============================================================
+async function renderHistory() {
+  const list = document.getElementById('history-list');
+  const emptyEl = document.getElementById('history-empty');
+
+  const sorted = [...races].sort((a, b) => {
+    if (a.date && b.date) return b.date.localeCompare(a.date);
+    return b.round - a.round;
+  });
+
+  const relevantRaces = sorted.filter(r => r.status === 'completed' || r.status === 'locked');
+
+  if (relevantRaces.length === 0) {
+    list.innerHTML = '';
+    emptyEl.classList.remove('hidden');
+    return;
+  }
+  emptyEl.classList.add('hidden');
+
+  // Load picks for completed races
+  for (const race of relevantRaces.filter(r => r.status === 'completed')) {
+    if (!allPicks[race.round]) await loadAllPicksForRace(race.round);
+  }
+
+  list.innerHTML = relevantRaces.map(race => {
+    const isCompleted = race.status === 'completed';
+    const statusBadge = isCompleted
+      ? '<span class="badge badge-completed">Completed</span>'
+      : '<span class="badge badge-locked">Locked</span>';
+
+    const winner = isCompleted && race.results?.length
+      ? driverName(race.results[0])
+      : '—';
+
+    return `<div class="card race-card" data-race-round="${race.round}">
+      <div class="race-header">
+        <div>
+          <strong>${esc(race.raceName)}</strong>
+          <span class="race-date">${race.date || ''}</span>
+          ${statusBadge}
+        </div>
+        <div style="font-size:0.8rem; color:var(--text-muted)">
+          ${isCompleted ? 'Winner: ' + esc(winner) : 'Awaiting results'}
+        </div>
+      </div>
+      <div class="race-detail">${renderRaceDetail(race)}</div>
+    </div>`;
+  }).join('');
+
+  list.querySelectorAll('.race-card').forEach(card => {
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('.btn') || e.target.closest('select')) return;
+      card.classList.toggle('expanded');
+    });
+  });
+}
+
+function renderRaceDetail(race) {
+  const isCompleted = race.status === 'completed';
+  let html = '';
+
+  if (isCompleted && race.results?.length) {
+    html += '<h3 style="margin-top:0">Finishing Order</h3><div style="margin-bottom:16px">';
+    race.results.slice(0, 14).forEach((did, pos) => {
+      html += `<div style="display:flex; align-items:center; gap:8px; padding:3px 0; font-size:0.85rem">
+        <span class="result-pos">P${pos + 1}</span><span>${esc(driverName(did))}</span>
+      </div>`;
+    });
+    html += '</div>';
+  }
+
+  // Picks & Scores
+  if (isCompleted) {
+    const racePicks = allPicks[race.round] || {};
+    html += '<h3>Picks & Scores</h3>';
+    html += '<table><thead><tr><th>Participant</th><th>Winner Pick</th><th>W Pts</th><th>10th Pick</th><th>10th Pts</th><th>Total</th></tr></thead><tbody>';
+
+    participants.forEach(p => {
+      const pick = racePicks[p.id];
+      if (!pick) {
+        html += `<tr><td>${esc(p.name)}</td><td colspan="5" style="color:var(--text-muted)">No picks</td></tr>`;
+        return;
+      }
+      const wp = calcWinnerPoints(pick.winnerPick, race.results);
+      const tp = calcTenthPoints(pick.tenthPlacePick, race.results);
+      const total = wp + tp;
+      const carryTag = pick.carryOver ? ' <span style="color:var(--yellow); font-size:0.7rem">(carried)</span>' : '';
+
+      html += `<tr>
+        <td><strong>${esc(p.name)}</strong>${carryTag}</td>
+        <td>${esc(driverName(pick.winnerPick))}</td>
+        <td><span class="points-badge${wp === 0 ? ' points-zero' : ''}">${wp}</span></td>
+        <td>${esc(driverName(pick.tenthPlacePick))}</td>
+        <td><span class="points-badge${tp === 0 ? ' points-zero' : ''}">${tp}</span></td>
+        <td><strong>${total}</strong></td>
+      </tr>`;
+    });
+    html += '</tbody></table>';
+  } else {
+    // Locked but not completed — show only own picks
+    const pick = myPicks[race.round];
+    html += '<h3>Your Picks</h3>';
+    if (pick) {
+      html += `<div style="display:flex; gap:24px; flex-wrap:wrap;">
+        <div><label>Winner Pick</label><strong>${esc(driverName(pick.winnerPick))}</strong></div>
+        <div><label>10th Place Pick</label><strong>${esc(driverName(pick.tenthPlacePick))}</strong></div>
+      </div>`;
+      if (pick.carryOver) html += '<p class="pick-carryover" style="margin-top:8px">Carried from previous race</p>';
+    } else {
+      html += '<p style="color:var(--text-muted)">No picks submitted.</p>';
+    }
+    html += '<p style="color:var(--text-muted); font-size:0.8rem; margin-top:8px">Other participants\' picks will be revealed when results are in.</p>';
+  }
+
+  return html;
+}
+
+// ============================================================
+// DRIVER STATS
+// ============================================================
+async function renderStats() {
+  const tbody = document.getElementById('stats-body');
+  const emptyEl = document.getElementById('stats-empty');
+  const completedRaces = races.filter(r => r.status === 'completed');
+
+  if (completedRaces.length === 0) {
+    tbody.innerHTML = '';
+    emptyEl.classList.remove('hidden');
+    return;
+  }
+  emptyEl.classList.add('hidden');
+
+  for (const race of completedRaces) {
+    if (!allPicks[race.round]) await loadAllPicksForRace(race.round);
+  }
+
+  const driverStats = {};
+  (leagueData?.drivers || []).forEach(d => {
+    driverStats[d.id] = { name: d.name, winnerPicks: 0, tenthPicks: 0, finishes: [], raceCount: 0 };
+  });
+
+  completedRaces.forEach(race => {
+    if (!race.results?.length) return;
+    race.results.forEach((did, pos) => {
+      if (!driverStats[did]) driverStats[did] = { name: driverName(did), winnerPicks: 0, tenthPicks: 0, finishes: [], raceCount: 0 };
+      driverStats[did].finishes.push(pos + 1);
+      driverStats[did].raceCount++;
+    });
+
+    const racePicks = allPicks[race.round] || {};
+    Object.values(racePicks).forEach(pick => {
+      if (pick.winnerPick && driverStats[pick.winnerPick]) driverStats[pick.winnerPick].winnerPicks++;
+      if (pick.tenthPlacePick && driverStats[pick.tenthPlacePick]) driverStats[pick.tenthPlacePick].tenthPicks++;
+    });
+  });
+
+  const rows = Object.values(driverStats)
+    .filter(d => d.raceCount > 0 || d.winnerPicks > 0 || d.tenthPicks > 0)
+    .sort((a, b) => (b.winnerPicks + b.tenthPicks) - (a.winnerPicks + a.tenthPicks));
+
+  tbody.innerHTML = rows.map(d => {
+    const avg = d.finishes.length > 0 ? (d.finishes.reduce((a, b) => a + b, 0) / d.finishes.length).toFixed(1) : '—';
+    return `<tr><td><strong>${esc(d.name)}</strong></td><td>${d.winnerPicks}</td><td>${d.tenthPicks}</td><td>${avg}</td><td>${d.raceCount}</td></tr>`;
+  }).join('');
+}
+
+// ============================================================
+// ADMIN
+// ============================================================
+async function renderAdmin() {
+  if (!session.isAdmin) return;
+
+  // Participants
+  renderAdminParticipants();
+  renderAdminRaces();
+  renderAdminDrivers();
+}
+
+function renderAdminParticipants() {
+  const container = document.getElementById('admin-participants-list');
+  if (participants.length === 0) {
+    container.innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem">No participants yet.</p>';
+    return;
+  }
+  container.innerHTML = participants.map(p => {
+    const adminTag = p.isAdmin ? ' <span style="color:var(--yellow); font-size:0.7rem">(admin)</span>' : '';
+    return `<span class="chip">${esc(p.name)}${adminTag}<button data-remove-participant="${p.id}">&times;</button></span>`;
+  }).join('');
+
+  container.querySelectorAll('[data-remove-participant]').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const pid = btn.dataset.removeParticipant;
+      if (pid === session.participantId) return alert('Cannot remove yourself.');
+      if (!confirm(`Remove ${participants.find(p => p.id === pid)?.name}?`)) return;
+      await deleteDoc(participantRef(pid));
+      await loadParticipants();
+      renderAdminParticipants();
+    });
+  });
+}
+
+document.getElementById('admin-add-participant').addEventListener('click', async () => {
+  const input = document.getElementById('admin-new-participant');
+  const name = input.value.trim();
+  if (!name) return;
+  const id = slugify(name);
+  if (participants.find(p => p.id === id)) return alert('Participant already exists.');
+
+  await setDoc(participantRef(id), { name, isAdmin: false, joinedAt: serverTimestamp() });
+  input.value = '';
+  await loadParticipants();
+  renderAdminParticipants();
+});
+
+document.getElementById('admin-new-participant').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') document.getElementById('admin-add-participant').click();
+});
+
+// RACES
+function renderAdminRaces() {
+  const container = document.getElementById('admin-races-list');
+  const sortedRaces = [...races].sort((a, b) => a.round - b.round);
+
+  container.innerHTML = sortedRaces.map(race => {
+    const statusBadge = race.status === 'completed'
+      ? '<span class="badge badge-completed">Completed</span>'
+      : race.status === 'locked'
+        ? '<span class="badge badge-locked">Locked</span>'
+        : '<span class="badge badge-upcoming">Upcoming</span>';
+
+    const raceDate = race.date || '';
+    const drivers = leagueData?.drivers || [];
+    const posLabels = ['1st','2nd','3rd','4th','5th','6th','7th','8th','9th','10th','11th','12th','13th','14th'];
+
+    let actions = '';
+
+    if (race.status === 'upcoming') {
+      actions += `<button class="btn btn-sm btn-secondary" data-lock-round="${race.round}">Lock Picks</button> `;
+    } else if (race.status === 'locked') {
+      actions += `<button class="btn btn-sm btn-secondary" data-unlock-round="${race.round}">Unlock Picks</button> `;
+      actions += `<button class="btn btn-sm" data-fetch-round="${race.round}">Fetch Results</button> `;
+    }
+
+    if (race.status !== 'completed') {
+      actions += `<button class="btn btn-sm btn-secondary" data-manual-round="${race.round}">Manual Entry</button>`;
+    }
+
+    // Manual entry form (hidden by default)
+    let manualForm = `<div id="manual-form-${race.round}" class="hidden" style="margin-top:12px">
+      <h3>Manual Result Entry</h3>
+      <div class="results-grid">
+        ${posLabels.map((label, i) => `<div class="result-slot">
+          <span class="result-pos">${label}</span>
+          <select id="manual-pos-${race.round}-${i}" style="flex:1">
+            <option value="">--</option>
+            ${drivers.map(d => `<option value="${d.id}"${race.results?.[i] === d.id ? ' selected' : ''}>${esc(d.name)}</option>`).join('')}
+          </select>
+        </div>`).join('')}
+      </div>
+      <div class="btn-row"><button class="btn btn-sm" data-save-manual-round="${race.round}">Save Results</button></div>
+    </div>`;
+
+    // All picks view for admin
+    let picksView = '';
+    if (race.status !== 'upcoming') {
+      picksView = `<div style="margin-top:12px"><button class="btn btn-sm btn-secondary" data-view-picks-round="${race.round}">View All Picks</button></div>
+      <div id="admin-picks-${race.round}" class="hidden" style="margin-top:8px"></div>`;
+    }
+
+    return `<div class="card" style="padding:12px 16px">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px">
+        <div>
+          <strong>R${race.round}: ${esc(race.raceName)}</strong>
+          <span class="race-date">${raceDate}</span>
+          ${statusBadge}
+        </div>
+        <div class="btn-row" style="margin-top:0">${actions}</div>
+      </div>
+      ${manualForm}
+      ${picksView}
+    </div>`;
+  }).join('');
+
+  // Attach event handlers
+  container.querySelectorAll('[data-lock-round]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const round = parseInt(btn.dataset.lockRound);
+      await updateDoc(raceRef(round), { status: 'locked', lockedAt: serverTimestamp() });
+      await carryOverPicks(round);
+      await loadRaces();
+      renderAdminRaces();
+    });
+  });
+
+  container.querySelectorAll('[data-unlock-round]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const round = parseInt(btn.dataset.unlockRound);
+      await updateDoc(raceRef(round), { status: 'upcoming', lockedAt: null });
+      await loadRaces();
+      renderAdminRaces();
+    });
+  });
+
+  container.querySelectorAll('[data-fetch-round]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const round = parseInt(btn.dataset.fetchRound);
+      btn.disabled = true;
+      btn.textContent = 'Fetching...';
+      try {
+        const results = await fetchRaceResults(leagueData.season, round);
+        if (!results) {
+          alert('Results not available yet for this race.');
+          btn.textContent = 'Fetch Results';
+          btn.disabled = false;
+          return;
+        }
+        await updateDoc(raceRef(round), { results, status: 'completed', completedAt: serverTimestamp() });
+        await loadRaces();
+        renderAdminRaces();
+      } catch (e) {
+        alert('Fetch error: ' + e.message);
+        btn.textContent = 'Fetch Results';
+        btn.disabled = false;
+      }
+    });
+  });
+
+  container.querySelectorAll('[data-manual-round]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const round = btn.dataset.manualRound;
+      document.getElementById(`manual-form-${round}`).classList.toggle('hidden');
+    });
+  });
+
+  container.querySelectorAll('[data-save-manual-round]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const round = parseInt(btn.dataset.saveManualRound);
+      const results = [];
+      for (let i = 0; i < 14; i++) {
+        const sel = document.getElementById(`manual-pos-${round}-${i}`);
+        if (sel?.value) results.push(sel.value);
+        else results.push('');
+      }
+      const filtered = results.filter(r => r !== '');
+      if (filtered.length === 0) return alert('Enter at least the race winner.');
+
+      await updateDoc(raceRef(round), { results: filtered, status: 'completed', completedAt: serverTimestamp() });
+      await loadRaces();
+      renderAdminRaces();
+    });
+  });
+
+  container.querySelectorAll('[data-view-picks-round]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const round = parseInt(btn.dataset.viewPicksRound);
+      const target = document.getElementById(`admin-picks-${round}`);
+      if (!target.classList.contains('hidden')) {
+        target.classList.add('hidden');
+        return;
+      }
+      const picks = await loadAllPicksForRace(round);
+      let html = '<table><thead><tr><th>Participant</th><th>Winner Pick</th><th>10th Pick</th><th>Carry Over</th></tr></thead><tbody>';
+      participants.forEach(p => {
+        const pick = picks[p.id];
+        if (!pick) {
+          html += `<tr><td>${esc(p.name)}</td><td colspan="3" style="color:var(--text-muted)">No picks</td></tr>`;
+          return;
+        }
+        html += `<tr><td>${esc(p.name)}</td><td>${esc(driverName(pick.winnerPick))}</td><td>${esc(driverName(pick.tenthPlacePick))}</td><td>${pick.carryOver ? 'Yes' : 'No'}</td></tr>`;
+      });
+      html += '</tbody></table>';
+      target.innerHTML = html;
+      target.classList.remove('hidden');
+    });
+  });
+}
+
+document.getElementById('admin-fetch-schedule').addEventListener('click', async () => {
+  const btn = document.getElementById('admin-fetch-schedule');
+  btn.disabled = true;
+  btn.textContent = 'Fetching...';
+  try {
+    const apiRaces = await fetchSchedule(leagueData.season);
+    const batch = writeBatch(db);
+    for (const race of apiRaces) {
+      const existing = races.find(r => r.round === parseInt(race.round));
+      if (existing && existing.status !== 'upcoming') continue; // Don't overwrite locked/completed
+
+      batch.set(raceRef(race.round), {
+        round: parseInt(race.round),
+        raceName: race.raceName,
+        circuitName: race.Circuit?.circuitName || '',
+        locality: race.Circuit?.Location?.locality || '',
+        country: race.Circuit?.Location?.country || '',
+        date: race.date,
+        time: race.time || null,
+        qualifyingDate: race.Qualifying?.date || null,
+        qualifyingTime: race.Qualifying?.time || null,
+        sprintDate: race.Sprint?.date || null,
+        sprintTime: race.Sprint?.time || null,
+        status: existing?.status || 'upcoming',
+        results: existing?.results || [],
+        createdAt: serverTimestamp()
+      }, { merge: true });
+    }
+    await batch.commit();
+    await loadRaces();
+    renderAdminRaces();
+    btn.textContent = 'Refresh Schedule from API';
+    btn.disabled = false;
+  } catch (e) {
+    alert('Error: ' + e.message);
+    btn.textContent = 'Refresh Schedule from API';
+    btn.disabled = false;
+  }
+});
+
+// DRIVERS
+function renderAdminDrivers() {
+  const container = document.getElementById('admin-drivers-list');
+  const drivers = leagueData?.drivers || [];
+  if (drivers.length === 0) {
+    container.innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem">No drivers.</p>';
+    return;
+  }
+  container.innerHTML = drivers.map(d =>
+    `<span class="chip">${esc(d.name)} <span style="color:var(--text-muted); font-size:0.7rem">(${d.id})</span><button data-remove-driver="${d.id}">&times;</button></span>`
+  ).join('');
+
+  container.querySelectorAll('[data-remove-driver]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const did = btn.dataset.removeDriver;
+      if (!confirm(`Remove driver ${did}?`)) return;
+      leagueData.drivers = leagueData.drivers.filter(d => d.id !== did);
+      await updateDoc(leagueRef(), { drivers: leagueData.drivers });
+      renderAdminDrivers();
+    });
+  });
+}
+
+document.getElementById('admin-add-driver').addEventListener('click', async () => {
+  const input = document.getElementById('admin-new-driver');
+  const val = input.value.trim();
+  if (!val.includes(':')) return alert('Format: driverId:Display Name');
+  const [id, ...nameParts] = val.split(':');
+  const name = nameParts.join(':').trim();
+  if (!id || !name) return alert('Format: driverId:Display Name');
+  if (leagueData.drivers.find(d => d.id === id.trim())) return alert('Driver ID already exists.');
+
+  leagueData.drivers.push({ id: id.trim(), name });
+  await updateDoc(leagueRef(), { drivers: leagueData.drivers });
+  input.value = '';
+  renderAdminDrivers();
+});
+
+document.getElementById('admin-new-driver').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') document.getElementById('admin-add-driver').click();
+});
+
+// EXPORT
+document.getElementById('admin-export').addEventListener('click', async () => {
+  const exportData = { league: leagueData, participants, races, picks: {} };
+  for (const race of races) {
+    const snap = await getDocs(picksCol(race.round));
+    const racePicks = {};
+    snap.forEach(d => { racePicks[d.id] = d.data(); });
+    exportData.picks[race.round] = racePicks;
+  }
+  const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `f1-fantasy-backup-${new Date().toISOString().split('T')[0]}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+document.getElementById('admin-clear-data').addEventListener('click', async () => {
+  if (!confirm('This will DELETE ALL LEAGUE DATA. Are you sure?')) return;
+  if (!confirm('Really? This cannot be undone.')) return;
+
+  // Delete all sub-documents
+  for (const race of races) {
+    const picksSnap = await getDocs(picksCol(race.round));
+    const batch = writeBatch(db);
+    picksSnap.forEach(d => batch.delete(d.ref));
+    await batch.commit();
+    await deleteDoc(raceRef(race.round));
+  }
+
+  for (const p of participants) {
+    await deleteDoc(participantRef(p.id));
+  }
+
+  await deleteDoc(leagueRef());
+
+  sessionStorage.removeItem('f1_session');
+  location.reload();
+});
+
+// LOGOUT
+document.getElementById('logout-btn').addEventListener('click', () => {
+  unsubscribers.forEach(fn => fn());
+  sessionStorage.removeItem('f1_session');
+  session = null;
+  document.getElementById('app').classList.add('hidden');
+  document.getElementById('login-overlay').classList.remove('hidden');
+  document.getElementById('login-error').textContent = '';
+  initLogin();
+});
+
+// ============================================================
+// UTILITIES
+// ============================================================
+function esc(str) {
+  if (!str) return '';
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+initSetup();
+
+</script>
+</body>
+</html>
