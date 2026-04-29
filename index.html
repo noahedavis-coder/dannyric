@@ -474,23 +474,6 @@ label {
   </div>
 </div>
 
-<!-- ADAM MODE OVERLAY -->
-<div id="adam-mode-overlay" class="overlay hidden">
-  <div class="overlay-card" style="max-width: 500px;">
-    <h2 style="text-align:center; color:var(--red); margin-bottom:20px; font-family:var(--font); text-transform:uppercase; letter-spacing:0.05em;">Entering Adam Mode</h2>
-    <div style="text-align:center; margin-bottom:20px;">
-      <img src="adammode.png" alt="Adam Mode" style="max-width:200px; border-radius:var(--radius);">
-    </div>
-    <p style="text-align:center; line-height:1.6; margin-bottom:24px; font-size:0.95rem;">
-      The pagans believed rocks dictated fate; then Jesus took the wheel, nNow Adam again embraces the tree of knowledge and surrenders to the algorithm. If you confirm Adam Mode, your two picks for this GP will be chosen by the algorithm. You will have no control. With this risk comes great potential reward as well - for if the algorithm deems you worthy, you will receive twice the normal points for each pick. You cannot change Adam Mode once you have surrendered.
-    </p>
-    <div class="btn-row" style="justify-content:center; gap:16px;">
-      <button class="btn btn-secondary" id="adam-mode-cancel">Cancel</button>
-      <button class="btn" id="adam-mode-confirm" style="background:var(--red);">Surrender to Algorithm</button>
-    </div>
-  </div>
-</div>
-
 <!-- APP -->
 <div id="app" class="hidden">
 <header>
@@ -672,37 +655,21 @@ function slugify(name) {
 // ============================================================
 // SCORING
 // ============================================================
-function calcWinnerPoints(driverId, results, adamMode = false) {
+function calcWinnerPoints(driverId, results) {
   const pos = results.indexOf(driverId);
-  const basePoints = pos >= 0 && pos < WINNER_POINTS.length ? WINNER_POINTS[pos] : 0;
-  return adamMode ? basePoints * 2 : basePoints;
+  if (pos >= 0 && pos < WINNER_POINTS.length) return WINNER_POINTS[pos];
+  return 0;
 }
 
-function calcTenthPoints(driverId, results, adamMode = false) {
+function calcTenthPoints(driverId, results) {
   const pos = results.indexOf(driverId);
-  const basePoints = TENTH_POINTS_MAP[pos] || 0;
-  return adamMode ? basePoints * 2 : basePoints;
+  return TENTH_POINTS_MAP[pos] || 0;
 }
 
 function driverName(driverId) {
   if (!leagueData?.drivers) return driverId;
   const d = leagueData.drivers.find(d => d.id === driverId);
   return d ? d.name : driverId;
-}
-
-// ============================================================
-// ADAM MODE
-// ============================================================
-function generateRandomPicks() {
-  const drivers = leagueData?.drivers || [];
-  if (drivers.length < 2) return null;
-
-  // Shuffle array and take first two drivers to ensure they're different
-  const shuffled = [...drivers].sort(() => Math.random() - 0.5);
-  return {
-    winnerPick: shuffled[0].id,
-    tenthPlacePick: shuffled[1].id
-  };
 }
 
 // ============================================================
@@ -1029,8 +996,7 @@ async function carryOverPicks(round) {
         winnerPick: prev.winnerPick,
         tenthPlacePick: prev.tenthPlacePick,
         submittedAt: serverTimestamp(),
-        carryOver: true,
-        adamMode: prev.adamMode || false
+        carryOver: true
       });
       carried++;
     }
@@ -1117,8 +1083,8 @@ async function renderDashboard() {
     const racePicks = allPicks[race.round] || {};
     Object.entries(racePicks).forEach(([pid, pick]) => {
       if (!scores[pid]) return;
-      const wp = calcWinnerPoints(pick.winnerPick, race.results, pick.adamMode);
-      const tp = calcTenthPoints(pick.tenthPlacePick, race.results, pick.adamMode);
+      const wp = calcWinnerPoints(pick.winnerPick, race.results);
+      const tp = calcTenthPoints(pick.tenthPlacePick, race.results);
       scores[pid].winner += wp;
       scores[pid].tenth += tp;
       scores[pid].total += wp + tp;
@@ -1218,13 +1184,9 @@ async function renderMyPicks() {
 
     let pickStatus = '';
     if (pick) {
-      if (pick.adamMode) {
-        pickStatus = '<span style="color:var(--green); font-weight:700;">😎 Adam Mode Active (2x Points)</span>';
-      } else if (pick.carryOver) {
-        pickStatus = '<span class="pick-carryover">Carried from previous race</span>';
-      } else {
-        pickStatus = '<span class="pick-saved">Picks saved</span>';
-      }
+      pickStatus = pick.carryOver
+        ? '<span class="pick-carryover">Carried from previous race</span>'
+        : '<span class="pick-saved">Picks saved</span>';
     }
 
     const driverOpts = drivers.map(d =>
@@ -1247,11 +1209,6 @@ async function renderMyPicks() {
       </div>`;
     }
 
-    // Check if this race has Adam Mode picks
-    const hasAdamMode = pick && pick.adamMode;
-    const isDisabled = hasAdamMode ? 'disabled' : '';
-    const disabledStyle = hasAdamMode ? 'opacity: 0.6; pointer-events: none;' : '';
-
     return `<div class="pick-card">
       <div class="pick-card-header">
         <div>
@@ -1260,23 +1217,22 @@ async function renderMyPicks() {
         </div>
         ${pickStatus}
       </div>
-      <div class="form-row" style="${disabledStyle}">
+      <div class="form-row">
         <div class="form-group" style="margin-bottom:0">
           <label>Winner Pick</label>
-          <select id="pick-w-${race.round}" ${isDisabled}>
+          <select id="pick-w-${race.round}">
             <option value="">-- Select driver --</option>
             ${driverOpts}
           </select>
         </div>
         <div class="form-group" style="margin-bottom:0">
           <label>10th Place Pick</label>
-          <select id="pick-t-${race.round}" ${isDisabled}>
+          <select id="pick-t-${race.round}">
             <option value="">-- Select driver --</option>
             ${driverOpts}
           </select>
         </div>
-        <button class="btn btn-sm" data-save-round="${race.round}" ${isDisabled}>${hasAdamMode ? 'Algorithm Chosen' : 'Save'}</button>
-        ${hasAdamMode ? '' : '<button class="btn btn-sm" data-adam-mode-round="' + race.round + '" style="background:#9333ea; margin-left:8px;">Adam Mode</button>'}
+        <button class="btn btn-sm" data-save-round="${race.round}">Save</button>
       </div>
     </div>`;
   }).join('');
@@ -1312,10 +1268,9 @@ async function renderMyPicks() {
           winnerPick: w,
           tenthPlacePick: t,
           submittedAt: serverTimestamp(),
-          carryOver: false,
-          adamMode: false
+          carryOver: false
         });
-        myPicks[round] = { winnerPick: w, tenthPlacePick: t, carryOver: false, adamMode: false };
+        myPicks[round] = { winnerPick: w, tenthPlacePick: t, carryOver: false };
         btn.textContent = 'Saved!';
         const phrases = [
           'those picks are a first-turn wreck',
@@ -1335,15 +1290,6 @@ async function renderMyPicks() {
         btn.textContent = 'Save';
         btn.disabled = false;
       }
-    });
-  });
-
-  // Attach Adam Mode handlers
-  container.querySelectorAll('[data-adam-mode-round]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const round = parseInt(btn.dataset.adamModeRound);
-      window.currentAdamModeRound = round; // Store for modal handler
-      document.getElementById('adam-mode-overlay').classList.remove('hidden');
     });
   });
 }
@@ -1433,14 +1379,13 @@ function renderRaceDetail(race) {
         html += `<tr><td>${esc(p.name)}</td><td colspan="5" style="color:var(--text-muted)">No picks</td></tr>`;
         return;
       }
-      const wp = calcWinnerPoints(pick.winnerPick, race.results, pick.adamMode);
-      const tp = calcTenthPoints(pick.tenthPlacePick, race.results, pick.adamMode);
+      const wp = calcWinnerPoints(pick.winnerPick, race.results);
+      const tp = calcTenthPoints(pick.tenthPlacePick, race.results);
       const total = wp + tp;
       const carryTag = pick.carryOver ? ' <span style="color:var(--yellow); font-size:0.7rem">(carried)</span>' : '';
-      const adamTag = pick.adamMode ? ' <span style="color:var(--green); font-size:0.8rem">😎</span>' : '';
 
       html += `<tr>
-        <td><strong>${esc(p.name)}</strong>${carryTag}${adamTag}</td>
+        <td><strong>${esc(p.name)}</strong>${carryTag}</td>
         <td>${esc(driverName(pick.winnerPick))}</td>
         <td><span class="points-badge${wp === 0 ? ' points-zero' : ''}">${wp}</span></td>
         <td>${esc(driverName(pick.tenthPlacePick))}</td>
@@ -1713,15 +1658,14 @@ function renderAdminRaces() {
         return;
       }
       const picks = await loadAllPicksForRace(round);
-      let html = '<table><thead><tr><th>Participant</th><th>Winner Pick</th><th>10th Pick</th><th>Carry Over</th><th>Adam Mode</th></tr></thead><tbody>';
+      let html = '<table><thead><tr><th>Participant</th><th>Winner Pick</th><th>10th Pick</th><th>Carry Over</th></tr></thead><tbody>';
       participants.forEach(p => {
         const pick = picks[p.id];
         if (!pick) {
-          html += `<tr><td>${esc(p.name)}</td><td colspan="4" style="color:var(--text-muted)">No picks</td></tr>`;
+          html += `<tr><td>${esc(p.name)}</td><td colspan="3" style="color:var(--text-muted)">No picks</td></tr>`;
           return;
         }
-        const adamIcon = pick.adamMode ? '😎' : '';
-        html += `<tr><td>${esc(p.name)}</td><td>${esc(driverName(pick.winnerPick))} ${adamIcon}</td><td>${esc(driverName(pick.tenthPlacePick))} ${adamIcon}</td><td>${pick.carryOver ? 'Yes' : 'No'}</td><td>${pick.adamMode ? 'Yes' : 'No'}</td></tr>`;
+        html += `<tr><td>${esc(p.name)}</td><td>${esc(driverName(pick.winnerPick))}</td><td>${esc(driverName(pick.tenthPlacePick))}</td><td>${pick.carryOver ? 'Yes' : 'No'}</td></tr>`;
       });
       html += '</tbody></table>';
       target.innerHTML = html;
@@ -1862,56 +1806,6 @@ document.getElementById('logout-btn').addEventListener('click', () => {
   document.getElementById('login-overlay').classList.remove('hidden');
   document.getElementById('login-error').textContent = '';
   initLogin();
-});
-
-// ADAM MODE MODAL HANDLERS
-document.getElementById('adam-mode-cancel').addEventListener('click', () => {
-  document.getElementById('adam-mode-overlay').classList.add('hidden');
-  window.currentAdamModeRound = null;
-});
-
-document.getElementById('adam-mode-confirm').addEventListener('click', async () => {
-  const round = window.currentAdamModeRound;
-  if (!round) return;
-
-  const picks = generateRandomPicks();
-  if (!picks) {
-    alert('Unable to generate random picks. Not enough drivers available.');
-    return;
-  }
-
-  document.getElementById('adam-mode-overlay').classList.add('hidden');
-
-  try {
-    // Save the Adam Mode picks to database
-    await setDoc(pickRef(round, session.participantId), {
-      participantId: session.participantId,
-      participantName: session.participantName,
-      winnerPick: picks.winnerPick,
-      tenthPlacePick: picks.tenthPlacePick,
-      submittedAt: serverTimestamp(),
-      carryOver: false,
-      adamMode: true
-    });
-
-    // Update local state
-    myPicks[round] = {
-      winnerPick: picks.winnerPick,
-      tenthPlacePick: picks.tenthPlacePick,
-      carryOver: false,
-      adamMode: true
-    };
-
-    // Refresh the picks display
-    renderMyPicks();
-
-    // Show confirmation message
-    alert(`Algorithm has chosen:\nWinner: ${driverName(picks.winnerPick)}\n10th Place: ${driverName(picks.tenthPlacePick)}\n\nYou will receive 2x points! 😎`);
-  } catch (e) {
-    alert('Error saving Adam Mode picks: ' + e.message);
-  }
-
-  window.currentAdamModeRound = null;
 });
 
 // ============================================================
