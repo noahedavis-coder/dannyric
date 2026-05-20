@@ -416,6 +416,77 @@ label {
 .msg-success { background: #14532d; color: var(--green); }
 .msg-error { background: #7f1d1d; color: #fca5a5; }
 
+/* ADAM MODE */
+.btn-adam {
+  background: linear-gradient(135deg, #7c3aed, #2563eb);
+  color: white;
+  border: 2px solid #a78bfa;
+  animation: adam-glow 2s ease-in-out infinite;
+}
+.btn-adam:hover { background: linear-gradient(135deg, #6d28d9, #1d4ed8); }
+@keyframes adam-glow {
+  0%, 100% { box-shadow: 0 0 8px rgba(124, 58, 237, 0.4); }
+  50% { box-shadow: 0 0 20px rgba(124, 58, 237, 0.8); }
+}
+.adam-mode-tag {
+  display: inline-block;
+  background: linear-gradient(135deg, #7c3aed, #2563eb);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 2px;
+  font-family: var(--font);
+  font-size: 0.6rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.adam-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  cursor: pointer;
+}
+.adam-modal {
+  text-align: center;
+  max-width: 500px;
+  padding: 32px;
+  animation: adam-pop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.adam-modal img {
+  width: 100%;
+  max-width: 400px;
+  border-radius: var(--radius);
+  border: 3px solid #7c3aed;
+  box-shadow: 0 0 40px rgba(124, 58, 237, 0.5);
+  margin-bottom: 20px;
+}
+.adam-modal h2 {
+  font-family: var(--font);
+  font-size: 1.8rem;
+  color: #a78bfa;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 12px;
+}
+.adam-modal .adam-picks {
+  color: var(--text-primary);
+  font-size: 1rem;
+  margin-bottom: 8px;
+}
+.adam-modal .adam-dismiss {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  margin-top: 16px;
+}
+@keyframes adam-pop {
+  0% { transform: scale(0.5); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
 @media (max-width: 600px) {
   .form-row { flex-direction: column; }
   .stat-grid { grid-template-columns: 1fr 1fr; }
@@ -1087,8 +1158,9 @@ async function renderDashboard() {
     const racePicks = allPicks[race.round] || {};
     Object.entries(racePicks).forEach(([pid, pick]) => {
       if (!scores[pid]) return;
-      const wp = calcWinnerPoints(pick.winnerPick, race.results);
-      const tp = calcTenthPoints(pick.tenthPlacePick, race.results);
+      const multiplier = pick.adamMode ? 2 : 1;
+      const wp = calcWinnerPoints(pick.winnerPick, race.results) * multiplier;
+      const tp = calcTenthPoints(pick.tenthPlacePick, race.results) * multiplier;
       scores[pid].winner += wp;
       scores[pid].tenth += tp;
       scores[pid].total += wp + tp;
@@ -1188,17 +1260,22 @@ async function renderMyPicks() {
 
     let pickStatus = '';
     if (pick) {
-      pickStatus = pick.carryOver
-        ? '<span class="pick-carryover">Carried from previous race</span>'
-        : '<span class="pick-saved">Picks saved</span>';
+      if (pick.adamMode) {
+        pickStatus = '<span class="adam-mode-tag">Adam Mode 2x</span>';
+      } else if (pick.carryOver) {
+        pickStatus = '<span class="pick-carryover">Carried from previous race</span>';
+      } else {
+        pickStatus = '<span class="pick-saved">Picks saved</span>';
+      }
     }
 
     const driverOpts = drivers.map(d =>
       `<option value="${d.id}">${esc(d.name)}</option>`
     ).join('');
 
-    if (isLocked) {
-      return `<div class="pick-card">
+    // Locked race OR Adam Mode picks (cannot be changed)
+    if (isLocked || (pick && pick.adamMode)) {
+      return `<div class="pick-card"${pick?.adamMode ? ' style="border-left-color:#7c3aed"' : ''}>
         <div class="pick-card-header">
           <div>
             <div class="pick-card-title">${esc(race.raceName)}</div>
@@ -1237,6 +1314,9 @@ async function renderMyPicks() {
           </select>
         </div>
         <button class="btn btn-sm" data-save-round="${race.round}">Save</button>
+      </div>
+      <div style="text-align:center; margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
+        <button class="btn btn-sm btn-adam" data-adam-round="${race.round}">Adam Mode</button>
       </div>
     </div>`;
   }).join('');
@@ -1292,6 +1372,54 @@ async function renderMyPicks() {
       } catch (e) {
         alert('Error saving: ' + e.message);
         btn.textContent = 'Save';
+        btn.disabled = false;
+      }
+    });
+  });
+
+  // Attach Adam Mode handlers
+  container.querySelectorAll('[data-adam-round]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const round = parseInt(btn.dataset.adamRound);
+      const driverList = leagueData?.drivers || [];
+      if (driverList.length < 2) { alert('Not enough drivers.'); return; }
+
+      // Pick two random different drivers
+      const shuffled = [...driverList].sort(() => Math.random() - 0.5);
+      const winnerPick = shuffled[0].id;
+      const tenthPlacePick = shuffled[1].id;
+
+      btn.disabled = true;
+      try {
+        await setDoc(pickRef(round, session.participantId), {
+          participantId: session.participantId,
+          participantName: session.participantName,
+          winnerPick,
+          tenthPlacePick,
+          submittedAt: serverTimestamp(),
+          carryOver: false,
+          adamMode: true
+        });
+        myPicks[round] = { winnerPick, tenthPlacePick, carryOver: false, adamMode: true };
+
+        // Show the Adam Mode popup
+        const modal = document.createElement('div');
+        modal.className = 'adam-modal-overlay';
+        modal.innerHTML = `<div class="adam-modal">
+          <img src="adam-mode.png" alt="Adam Mode">
+          <h2>Adam mode engaged!!!!</h2>
+          <div class="adam-picks"><strong>Winner:</strong> ${esc(driverName(winnerPick))}</div>
+          <div class="adam-picks"><strong>10th Place:</strong> ${esc(driverName(tenthPlacePick))}</div>
+          <div class="adam-picks" style="margin-top:8px; color:#a78bfa;">Points doubled for this race!</div>
+          <div class="adam-dismiss">click anywhere to close</div>
+        </div>`;
+        document.body.appendChild(modal);
+        modal.addEventListener('click', () => {
+          modal.remove();
+          renderMyPicks();
+        });
+      } catch (e) {
+        alert('Error: ' + e.message);
         btn.disabled = false;
       }
     });
@@ -1383,13 +1511,15 @@ function renderRaceDetail(race) {
         html += `<tr><td>${esc(p.name)}</td><td colspan="5" style="color:var(--text-muted)">No picks</td></tr>`;
         return;
       }
-      const wp = calcWinnerPoints(pick.winnerPick, race.results);
-      const tp = calcTenthPoints(pick.tenthPlacePick, race.results);
+      const multiplier = pick.adamMode ? 2 : 1;
+      const wp = calcWinnerPoints(pick.winnerPick, race.results) * multiplier;
+      const tp = calcTenthPoints(pick.tenthPlacePick, race.results) * multiplier;
       const total = wp + tp;
       const carryTag = pick.carryOver ? ' <span style="color:var(--yellow); font-size:0.7rem">(carried)</span>' : '';
+      const adamTag = pick.adamMode ? ' <span class="adam-mode-tag">Adam Mode 2x</span>' : '';
 
       html += `<tr>
-        <td><strong>${esc(p.name)}</strong>${carryTag}</td>
+        <td><strong>${esc(p.name)}</strong>${carryTag}${adamTag}</td>
         <td>${esc(driverName(pick.winnerPick))}</td>
         <td><span class="points-badge${wp === 0 ? ' points-zero' : ''}">${wp}</span></td>
         <td>${esc(driverName(pick.tenthPlacePick))}</td>
