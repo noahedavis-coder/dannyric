@@ -1381,6 +1381,10 @@ async function renderMyPicks() {
   container.querySelectorAll('[data-adam-round]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const round = parseInt(btn.dataset.adamRound);
+
+      // Prevent if already in Adam Mode
+      if (myPicks[round]?.adamMode) return;
+
       const driverList = leagueData?.drivers || [];
       if (driverList.length < 2) { alert('Not enough drivers.'); return; }
 
@@ -1389,7 +1393,15 @@ async function renderMyPicks() {
       const winnerPick = shuffled[0].id;
       const tenthPlacePick = shuffled[1].id;
 
+      // Immediately disable ALL form elements for this race
       btn.disabled = true;
+      const saveBtn = container.querySelector(`[data-save-round="${round}"]`);
+      if (saveBtn) saveBtn.disabled = true;
+      const wSel = document.getElementById(`pick-w-${round}`);
+      const tSel = document.getElementById(`pick-t-${round}`);
+      if (wSel) wSel.disabled = true;
+      if (tSel) tSel.disabled = true;
+
       try {
         await setDoc(pickRef(round, session.participantId), {
           participantId: session.participantId,
@@ -1402,7 +1414,10 @@ async function renderMyPicks() {
         });
         myPicks[round] = { winnerPick, tenthPlacePick, carryOver: false, adamMode: true };
 
-        // Show the Adam Mode popup
+        // Re-render the pick card immediately (shows locked state)
+        await renderMyPicks();
+
+        // Show the Adam Mode popup ON TOP of the locked card
         const modal = document.createElement('div');
         modal.className = 'adam-modal-overlay';
         modal.innerHTML = `<div class="adam-modal">
@@ -1414,10 +1429,7 @@ async function renderMyPicks() {
           <div class="adam-dismiss">click anywhere to close</div>
         </div>`;
         document.body.appendChild(modal);
-        modal.addEventListener('click', () => {
-          modal.remove();
-          renderMyPicks();
-        });
+        modal.addEventListener('click', () => modal.remove());
       } catch (e) {
         alert('Error: ' + e.message);
         btn.disabled = false;
