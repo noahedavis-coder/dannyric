@@ -1772,78 +1772,80 @@ document.getElementById('admin-refresh-drivers').addEventListener('click', async
     const apiDrivers = await fetchDriversList(leagueData.season);
     const oldDrivers = leagueData.drivers || [];
 
-    // Build a name→oldId mapping from the current driver list
+    // Build name→oldId mapping (normalize: lowercase, strip spaces)
+    const normalize = s => s.toLowerCase().replace(/\s+/g, ' ').trim();
     const nameToOldId = {};
+    oldDrivers.forEach(d => { nameToOldId[normalize(d.name)] = d.id; });
+
+    // Also build a last-name fallback map for partial matches
+    const lastNameToOldId = {};
     oldDrivers.forEach(d => {
-      nameToOldId[d.name.toLowerCase()] = d.id;
+      const parts = d.name.trim().split(/\s+/);
+      const last = parts[parts.length - 1].toLowerCase();
+      lastNameToOldId[last] = d.id;
     });
 
-    // Build oldId→newId mapping by matching on name
-    const idMapping = {};  // oldId → newId
-    let changedCount = 0;
+    // Build oldId→newId mapping
+    const idMapping = {};
     apiDrivers.forEach(apiD => {
-      const oldId = nameToOldId[apiD.name.toLowerCase()];
+      const oldId = nameToOldId[normalize(apiD.name)]
+        || lastNameToOldId[apiD.name.trim().split(/\s+/).pop().toLowerCase()];
       if (oldId && oldId !== apiD.id) {
         idMapping[oldId] = apiD.id;
-        changedCount++;
       }
     });
+
+    const changedCount = Object.keys(idMapping).length;
 
     // Update driver list in Firestore
     leagueData.drivers = apiDrivers;
     await updateDoc(leagueRef(), { drivers: apiDrivers });
+    statusEl.textContent = `Driver list updated (${apiDrivers.length} drivers). ${changedCount} ID change(s) found.`;
 
-    if (changedCount === 0) {
-      statusEl.textContent = `Driver list updated (${apiDrivers.length} drivers). No ID mismatches found.`;
-    } else {
-      // Fix all picks that use old IDs
-      statusEl.textContent = `Found ${changedCount} ID change(s). Updating picks...`;
+    if (changedCount > 0) {
+      // Fix picks that use old IDs — only check races that have picks
+      statusEl.textContent += ' Fixing picks...';
       let picksFixed = 0;
 
       for (const race of races) {
-        const snap = await getDocs(picksCol(race.round));
-        const batch = writeBatch(db);
-        let batchHasUpdates = false;
+        try {
+          const snap = await getDocs(picksCol(race.round));
+          if (snap.empty) continue;
 
-        snap.forEach(d => {
-          const pick = d.data();
-          let needsUpdate = false;
-          const updates = {};
+          const batch = writeBatch(db);
+          let batchHasUpdates = false;
 
-          if (pick.winnerPick && idMapping[pick.winnerPick]) {
-            updates.winnerPick = idMapping[pick.winnerPick];
-            needsUpdate = true;
-          }
-          if (pick.tenthPlacePick && idMapping[pick.tenthPlacePick]) {
-            updates.tenthPlacePick = idMapping[pick.tenthPlacePick];
-            needsUpdate = true;
-          }
+          snap.forEach(d => {
+            const pick = d.data();
+            const updates = {};
+            if (pick.winnerPick && idMapping[pick.winnerPick]) updates.winnerPick = idMapping[pick.winnerPick];
+            if (pick.tenthPlacePick && idMapping[pick.tenthPlacePick]) updates.tenthPlacePick = idMapping[pick.tenthPlacePick];
 
-          if (needsUpdate) {
-            batch.update(d.ref, updates);
-            batchHasUpdates = true;
-            picksFixed++;
-          }
-        });
+            if (Object.keys(updates).length > 0) {
+              batch.update(d.ref, updates);
+              batchHasUpdates = true;
+              picksFixed++;
+            }
+          });
 
-        if (batchHasUpdates) await batch.commit();
+          if (batchHasUpdates) await batch.commit();
+        } catch (raceErr) {
+          console.error(`Error fixing picks for round ${race.round}:`, raceErr);
+        }
       }
 
-      // Clear cached picks so they reload with new IDs
       allPicks = {};
       await loadMyPicks();
-
-      statusEl.textContent = `Done! Updated ${changedCount} driver ID(s) and fixed ${picksFixed} pick(s).`;
+      statusEl.textContent = `Done! Updated ${changedCount} driver ID(s), fixed ${picksFixed} pick(s).`;
     }
 
     renderAdminDrivers();
-    btn.textContent = 'Refresh Drivers from API';
-    btn.disabled = false;
   } catch (e) {
+    console.error('Refresh drivers error:', e);
     statusEl.textContent = 'Error: ' + e.message;
-    btn.textContent = 'Refresh Drivers from API';
-    btn.disabled = false;
   }
+  btn.textContent = 'Refresh Drivers from API';
+  btn.disabled = false;
 });
 
 // EXPORT
