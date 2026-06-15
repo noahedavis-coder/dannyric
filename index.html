@@ -482,6 +482,7 @@ label {
   font-size: 0.75rem;
   margin-top: 16px;
 }
+.chip-reserve { opacity: 0.5; }
 @keyframes adam-pop {
   0% { transform: scale(0.5); opacity: 0; }
   100% { transform: scale(1); opacity: 1; }
@@ -1269,7 +1270,7 @@ async function renderMyPicks() {
       }
     }
 
-    const driverOpts = drivers.map(d =>
+    const driverOpts = drivers.filter(d => !d.reserve).map(d =>
       `<option value="${d.id}">${esc(d.name)}</option>`
     ).join('');
 
@@ -1385,7 +1386,7 @@ async function renderMyPicks() {
       // Prevent if already in Adam Mode
       if (myPicks[round]?.adamMode) return;
 
-      const driverList = leagueData?.drivers || [];
+      const driverList = (leagueData?.drivers || []).filter(d => !d.reserve);
       if (driverList.length < 2) { alert('Not enough drivers.'); return; }
 
       // Pick two random different drivers
@@ -1869,7 +1870,7 @@ function renderAdminDrivers() {
     return;
   }
   container.innerHTML = drivers.map(d =>
-    `<span class="chip">${esc(d.name)} <span style="color:var(--text-muted); font-size:0.7rem">(${d.id})</span><button data-remove-driver="${d.id}">&times;</button></span>`
+    `<span class="chip${d.reserve ? ' chip-reserve' : ''}">${esc(d.name)} <span style="color:var(--text-muted); font-size:0.7rem">(${d.id})</span>${d.reserve ? ' <span style="color:#a78bfa; font-size:0.65rem">RSV</span>' : ''}<button data-toggle-reserve="${d.id}" title="${d.reserve ? 'Make active' : 'Mark as reserve'}" style="margin-left:2px; color:${d.reserve ? '#a78bfa' : 'var(--text-muted)'}; font-size:0.7rem">${d.reserve ? '&#9733;' : '&#9734;'}</button><button data-remove-driver="${d.id}">&times;</button></span>`
   ).join('');
 
   container.querySelectorAll('[data-remove-driver]').forEach(btn => {
@@ -1877,6 +1878,17 @@ function renderAdminDrivers() {
       const did = btn.dataset.removeDriver;
       if (!confirm(`Remove driver ${did}?`)) return;
       leagueData.drivers = leagueData.drivers.filter(d => d.id !== did);
+      await updateDoc(leagueRef(), { drivers: leagueData.drivers });
+      renderAdminDrivers();
+    });
+  });
+
+  container.querySelectorAll('[data-toggle-reserve]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const did = btn.dataset.toggleReserve;
+      const driver = leagueData.drivers.find(d => d.id === did);
+      if (!driver) return;
+      driver.reserve = !driver.reserve;
       await updateDoc(leagueRef(), { drivers: leagueData.drivers });
       renderAdminDrivers();
     });
@@ -1914,26 +1926,27 @@ document.getElementById('admin-refresh-drivers').addEventListener('click', async
     const apiDrivers = await fetchDriversList(leagueData.season);
     const oldDrivers = leagueData.drivers || [];
 
-    // Build name→oldId mapping (normalize: lowercase, strip spaces)
+    // Build name→oldDriver mapping (normalize: lowercase, strip spaces)
     const normalize = s => s.toLowerCase().replace(/\s+/g, ' ').trim();
-    const nameToOldId = {};
-    oldDrivers.forEach(d => { nameToOldId[normalize(d.name)] = d.id; });
+    const nameToOld = {};
+    oldDrivers.forEach(d => { nameToOld[normalize(d.name)] = d; });
 
     // Also build a last-name fallback map for partial matches
-    const lastNameToOldId = {};
+    const lastNameToOld = {};
     oldDrivers.forEach(d => {
       const parts = d.name.trim().split(/\s+/);
       const last = parts[parts.length - 1].toLowerCase();
-      lastNameToOldId[last] = d.id;
+      lastNameToOld[last] = d;
     });
 
-    // Build oldId→newId mapping
+    // Build oldId→newId mapping and preserve reserve flags
     const idMapping = {};
     apiDrivers.forEach(apiD => {
-      const oldId = nameToOldId[normalize(apiD.name)]
-        || lastNameToOldId[apiD.name.trim().split(/\s+/).pop().toLowerCase()];
-      if (oldId && oldId !== apiD.id) {
-        idMapping[oldId] = apiD.id;
+      const old = nameToOld[normalize(apiD.name)]
+        || lastNameToOld[apiD.name.trim().split(/\s+/).pop().toLowerCase()];
+      if (old) {
+        if (old.reserve) apiD.reserve = true;
+        if (old.id !== apiD.id) idMapping[old.id] = apiD.id;
       }
     });
 
