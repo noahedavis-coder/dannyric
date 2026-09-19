@@ -699,6 +699,24 @@ const db = getFirestore(app);
 const LEAGUE_ID = 'default';
 const JOLPICA_BASE = 'https://api.jolpi.ca/ergast/f1';
 
+// ============================================================
+// PICK OVERRIDES
+// Manual corrections to submitted picks, keyed by round then participantId.
+// Applied on top of Firestore data at load time; Firestore itself is untouched.
+// Scores are recomputed from these values automatically.
+// ============================================================
+const PICK_OVERRIDES = {
+  14: { // 2026 Spanish Grand Prix (Madrid)
+    aaron: { winnerPick: 'antonelli', tenthPlacePick: 'gasly' }
+  }
+};
+
+function applyPickOverride(round, pid, pick) {
+  const o = PICK_OVERRIDES[round]?.[pid];
+  if (!o || !pick) return pick;
+  return { ...pick, ...o, carryOver: false, overridden: true };
+}
+
 const WINNER_POINTS = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
 const TENTH_POINTS_MAP = { 9: 10, 10: 8, 11: 6, 12: 4, 13: 2 };
 
@@ -990,7 +1008,7 @@ async function loadMyPicks() {
     try {
       const snap = await getDoc(pickRef(race.round, session.participantId));
       if (snap.exists()) {
-        myPicks[race.round] = snap.data();
+        myPicks[race.round] = applyPickOverride(race.round, session.participantId, snap.data());
       }
     } catch (e) { /* skip */ }
   }
@@ -999,7 +1017,7 @@ async function loadMyPicks() {
 async function loadAllPicksForRace(round) {
   const snap = await getDocs(picksCol(round));
   const picks = {};
-  snap.forEach(d => { picks[d.id] = d.data(); });
+  snap.forEach(d => { picks[d.id] = applyPickOverride(round, d.id, d.data()); });
   allPicks[round] = picks;
   return picks;
 }
