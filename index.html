@@ -706,15 +706,25 @@ const JOLPICA_BASE = 'https://api.jolpi.ca/ergast/f1';
 // Scores are recomputed from these values automatically.
 // ============================================================
 const PICK_OVERRIDES = {
+  7: { // 2026 Barcelona GP — Aaron's Canadian/Monaco Adam Mode picks were carried; use last non-Adam (Miami)
+    aaron: { winnerPick: 'norris', tenthPlacePick: 'gasly', carryOver: true }
+  },
+  10: { // 2026 Belgian GP — Noah's British GP Adam Mode picks were carried; use last non-Adam (Monaco)
+    noah: { winnerPick: 'russell', tenthPlacePick: 'bortoleto', carryOver: true }
+  },
   14: { // 2026 Spanish Grand Prix (Madrid)
-    aaron: { winnerPick: 'antonelli', tenthPlacePick: 'gasly' }
+    aaron: { winnerPick: 'antonelli', tenthPlacePick: 'gasly', carryOver: false }
+  },
+  15: { // 2026 Azerbaijan GP — Adam Mode picks from Spain were carried; use last non-Adam
+    adam: { winnerPick: 'hamilton', tenthPlacePick: 'gasly', carryOver: true },   // Italian/Belgian
+    chris: { winnerPick: 'hamilton', tenthPlacePick: 'lawson', carryOver: true }  // Italian
   }
 };
 
 function applyPickOverride(round, pid, pick) {
   const o = PICK_OVERRIDES[round]?.[pid];
   if (!o || !pick) return pick;
-  return { ...pick, ...o, carryOver: false, overridden: true };
+  return { ...pick, adamMode: false, ...o, overridden: true };
 }
 
 const WINNER_POINTS = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
@@ -1065,36 +1075,40 @@ async function checkAutoLock() {
 
 async function carryOverPicks(round) {
   const roundNum = typeof round === 'string' ? parseInt(round) : round;
-  // Find previous race round
   const sortedRaces = [...races].sort((a, b) => a.round - b.round);
   const idx = sortedRaces.findIndex(r => r.round === roundNum);
   if (idx <= 0) return;  // No previous race
 
-  const prevRound = sortedRaces[idx - 1].round;
-
-  // Get all existing picks for this round
   const existingSnap = await getDocs(picksCol(round));
   const existingPids = new Set();
   existingSnap.forEach(d => existingPids.add(d.id));
 
-  // Get previous round picks
-  const prevSnap = await getDocs(picksCol(prevRound));
+  // Walk backwards from the previous race. Adam Mode picks never carry
+  // forward — use the most recent non-Adam Mode picks instead.
+  const sourceByPid = {};
+  for (let i = idx - 1; i >= 0; i--) {
+    const prevSnap = await getDocs(picksCol(sortedRaces[i].round));
+    prevSnap.forEach(d => {
+      if (existingPids.has(d.id) || sourceByPid[d.id]) return;
+      const pick = applyPickOverride(sortedRaces[i].round, d.id, d.data());
+      if (pick.adamMode) return;
+      sourceByPid[d.id] = pick;
+    });
+  }
+
   const batch = writeBatch(db);
   let carried = 0;
-
-  prevSnap.forEach(d => {
-    if (!existingPids.has(d.id)) {
-      const prev = d.data();
-      batch.set(pickRef(round, d.id), {
-        participantId: prev.participantId,
-        winnerPick: prev.winnerPick,
-        tenthPlacePick: prev.tenthPlacePick,
-        submittedAt: serverTimestamp(),
-        carryOver: true
-      });
-      carried++;
-    }
-  });
+  for (const [pid, prev] of Object.entries(sourceByPid)) {
+    batch.set(pickRef(round, pid), {
+      participantId: prev.participantId || pid,
+      winnerPick: prev.winnerPick,
+      tenthPlacePick: prev.tenthPlacePick,
+      submittedAt: serverTimestamp(),
+      carryOver: true,
+      adamMode: false
+    });
+    carried++;
+  }
 
   if (carried > 0) await batch.commit();
 }
