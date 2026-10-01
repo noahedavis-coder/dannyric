@@ -1065,36 +1065,40 @@ async function checkAutoLock() {
 
 async function carryOverPicks(round) {
   const roundNum = typeof round === 'string' ? parseInt(round) : round;
-  // Find previous race round
   const sortedRaces = [...races].sort((a, b) => a.round - b.round);
   const idx = sortedRaces.findIndex(r => r.round === roundNum);
   if (idx <= 0) return;  // No previous race
 
-  const prevRound = sortedRaces[idx - 1].round;
-
-  // Get all existing picks for this round
   const existingSnap = await getDocs(picksCol(round));
   const existingPids = new Set();
   existingSnap.forEach(d => existingPids.add(d.id));
 
-  // Get previous round picks
-  const prevSnap = await getDocs(picksCol(prevRound));
+  // Walk backwards from the previous race. Adam Mode picks never carry
+  // forward — use the most recent non-Adam Mode picks instead.
+  const sourceByPid = {};
+  for (let i = idx - 1; i >= 0; i--) {
+    const prevSnap = await getDocs(picksCol(sortedRaces[i].round));
+    prevSnap.forEach(d => {
+      if (existingPids.has(d.id) || sourceByPid[d.id]) return;
+      const pick = applyPickOverride(sortedRaces[i].round, d.id, d.data());
+      if (pick.adamMode) return;
+      sourceByPid[d.id] = pick;
+    });
+  }
+
   const batch = writeBatch(db);
   let carried = 0;
-
-  prevSnap.forEach(d => {
-    if (!existingPids.has(d.id)) {
-      const prev = d.data();
-      batch.set(pickRef(round, d.id), {
-        participantId: prev.participantId,
-        winnerPick: prev.winnerPick,
-        tenthPlacePick: prev.tenthPlacePick,
-        submittedAt: serverTimestamp(),
-        carryOver: true
-      });
-      carried++;
-    }
-  });
+  for (const [pid, prev] of Object.entries(sourceByPid)) {
+    batch.set(pickRef(round, pid), {
+      participantId: prev.participantId || pid,
+      winnerPick: prev.winnerPick,
+      tenthPlacePick: prev.tenthPlacePick,
+      submittedAt: serverTimestamp(),
+      carryOver: true,
+      adamMode: false
+    });
+    carried++;
+  }
 
   if (carried > 0) await batch.commit();
 }
