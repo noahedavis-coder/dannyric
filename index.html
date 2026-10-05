@@ -412,7 +412,7 @@ label {
 .admin-only { display: none; }
 .loading { text-align: center; padding: 20px; color: var(--text-muted); }
 
-.msg { margin-top: 12px; font-size: 0.875rem; padding: 8px 12px; border-radius: var(--radius); }
+.msg { margin-top: 12px; font-size: 0.875rem; padding: 8px 12px; border-radius: var(--radius); white-space: pre-wrap; }
 .msg-success { background: #14532d; color: var(--green); }
 .msg-error { background: #7f1d1d; color: #fca5a5; }
 
@@ -625,6 +625,7 @@ label {
   <!-- ADMIN -->
   <div id="page-admin" class="page">
     <h2>Admin Panel</h2>
+    <div id="admin-drift-banner" class="msg msg-error hidden"></div>
 
     <div class="card">
       <h3>Participants</h3>
@@ -642,6 +643,7 @@ label {
       <div class="btn-row" style="margin-top:0; margin-bottom:16px;">
         <button class="btn btn-sm" id="admin-fetch-schedule">Refresh Schedule from API</button>
       </div>
+      <div id="admin-schedule-msg" class="msg hidden"></div>
       <div id="admin-races-list"></div>
     </div>
 
@@ -789,9 +791,17 @@ async function fetchRaceResults(season, round) {
   const json = await res.json();
   const raceData = json.MRData.RaceTable.Races[0];
   if (!raceData?.Results || raceData.Results.length === 0) return null;
-  return raceData.Results
-    .sort((a, b) => parseInt(a.position) - parseInt(b.position))
-    .map(r => r.Driver.driverId);
+  return {
+    results: raceData.Results
+      .sort((a, b) => parseInt(a.position) - parseInt(b.position))
+      .map(r => r.Driver.driverId),
+    raceName: raceData.raceName,
+    date: raceData.date
+  };
+}
+
+function feedDateMatchesStored(fetched, race) {
+  return !!(fetched?.date && race?.date && fetched.date === race.date);
 }
 
 // ============================================================
@@ -981,6 +991,10 @@ async function startApp() {
   // Set up real-time listeners
   setupListeners();
 
+  if (session.isAdmin) {
+    checkCalendarDrift().catch(e => console.warn('Calendar drift check failed', e));
+  }
+
   // Check for auto-lock and auto-fetch results
   await checkAutoLock();
   await checkAutoFetchResults();
@@ -1117,10 +1131,14 @@ async function checkAutoFetchResults() {
 
     if (now >= fetchAfter) {
       try {
-        const results = await fetchRaceResults(leagueData.season, race.round);
-        if (results && results.length > 0) {
+        const fetched = await fetchRaceResults(leagueData.season, race.round);
+        if (fetched && fetched.results.length > 0) {
+          if (!feedDateMatchesStored(fetched, race)) {
+            console.warn(`Calendar out of sync with F1 feed - results not saved for round ${race.round}. Feed date ${fetched.date}, stored date ${race.date}.`);
+            continue;
+          }
           await updateDoc(raceRef(race.round), {
-            results,
+            results: fetched.results,
             status: 'completed',
             completedAt: serverTimestamp()
           });
@@ -1637,10 +1655,67 @@ async function renderStats() {
 async function renderAdmin() {
   if (!session.isAdmin) return;
 
-  // Participants
+  renderAdminDriftBanner();
   renderAdminParticipants();
   renderAdminRaces();
   renderAdminDrivers();
+}
+
+let calendarDrift = [];
+
+function setAdminMessage(text, kind) {
+  const el = document.getElementById('admin-schedule-msg');
+  if (!el) return;
+  if (!text) {
+    el.className = 'msg hidden';
+    el.textContent = '';
+    return;
+  }
+  el.className = `msg ${kind === 'success' ? 'msg-success' : 'msg-error'}`;
+  el.textContent = text;
+}
+
+function renderAdminDriftBanner() {
+  const el = document.getElementById('admin-drift-banner');
+  if (!el) return;
+  if (!calendarDrift.length) {
+    el.classList.add('hidden');
+    el.textContent = '';
+    return;
+  }
+  el.classList.remove('hidden');
+  el.innerHTML = '<strong>Calendar out of sync with F1 feed</strong><br>' +
+    calendarDrift.map(d =>
+      `Round ${d.round}: stored ${esc(d.storedName)} (${esc(d.storedDate)}) vs feed ${esc(d.feedName)} (${esc(d.feedDate)})`
+    ).join('<br>');
+}
+
+async function checkCalendarDrift() {
+  calendarDrift = [];
+  if (!session?.isAdmin || !leagueData?.season) return;
+  try {
+    const apiRaces = await fetchSchedule(leagueData.season);
+    const feedByRound = new Map(apiRaces.map(r => [parseInt(r.round), r]));
+    const storedByRound = new Map(races.map(r => [r.round, r]));
+    const rounds = new Set([...feedByRound.keys(), ...storedByRound.keys()]);
+    for (const round of [...rounds].sort((a, b) => a - b)) {
+      const stored = storedByRound.get(round);
+      const feed = feedByRound.get(round);
+      if (!stored || !feed || stored.date !== feed.date) {
+        calendarDrift.push({
+          round,
+          storedName: stored?.raceName || '(missing)',
+          storedDate: stored?.date || '(missing)',
+          feedName: feed?.raceName || '(missing)',
+          feedDate: feed?.date || '(missing)'
+        });
+      }
+    }
+  } catch (e) {
+    console.warn('Calendar drift check failed', e);
+    calendarDrift = [];
+  }
+  renderAdminDriftBanner();
 }
 
 function renderAdminParticipants() {
@@ -1707,6 +1782,8 @@ function renderAdminRaces() {
     } else if (race.status === 'locked') {
       actions += `<button class="btn btn-sm btn-secondary" data-unlock-round="${race.round}">Unlock Picks</button> `;
       actions += `<button class="btn btn-sm" data-fetch-round="${race.round}">Fetch Results</button> `;
+    } else if (race.status === 'completed') {
+      actions += `<button class="btn btn-sm" data-fetch-round="${race.round}">Fetch Results</button> `;
     }
 
     if (race.status !== 'completed') {
@@ -1772,21 +1849,30 @@ function renderAdminRaces() {
   container.querySelectorAll('[data-fetch-round]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const round = parseInt(btn.dataset.fetchRound);
+      const race = races.find(r => r.round === round);
       btn.disabled = true;
       btn.textContent = 'Fetching...';
       try {
-        const results = await fetchRaceResults(leagueData.season, round);
-        if (!results) {
-          alert('Results not available yet for this race.');
+        const fetched = await fetchRaceResults(leagueData.season, round);
+        if (!fetched) {
+          setAdminMessage('Results not available yet for this race.', 'error');
           btn.textContent = 'Fetch Results';
           btn.disabled = false;
           return;
         }
-        await updateDoc(raceRef(round), { results, status: 'completed', completedAt: serverTimestamp() });
+        if (!feedDateMatchesStored(fetched, race)) {
+          console.warn(`Calendar out of sync with F1 feed - results not saved for round ${round}. Feed date ${fetched.date}, stored date ${race?.date}.`);
+          setAdminMessage('Calendar out of sync with F1 feed - results not saved.', 'error');
+          btn.textContent = 'Fetch Results';
+          btn.disabled = false;
+          return;
+        }
+        await updateDoc(raceRef(round), { results: fetched.results, status: 'completed', completedAt: serverTimestamp() });
+        setAdminMessage(`Saved results for Round ${round}.`, 'success');
         await loadRaces();
         renderAdminRaces();
       } catch (e) {
-        alert('Fetch error: ' + e.message);
+        setAdminMessage('Fetch error: ' + e.message, 'error');
         btn.textContent = 'Fetch Results';
         btn.disabled = false;
       }
@@ -1847,15 +1933,30 @@ document.getElementById('admin-fetch-schedule').addEventListener('click', async 
   const btn = document.getElementById('admin-fetch-schedule');
   btn.disabled = true;
   btn.textContent = 'Fetching...';
+  setAdminMessage('', 'success');
   try {
     const apiRaces = await fetchSchedule(leagueData.season);
     const batch = writeBatch(db);
+    const skipped = [];
+    const feedRounds = apiRaces.map(r => parseInt(r.round));
+    const maxFeedRound = feedRounds.length ? Math.max(...feedRounds) : 0;
+    let writes = 0;
+
     for (const race of apiRaces) {
-      const existing = races.find(r => r.round === parseInt(race.round));
+      const round = parseInt(race.round);
+      const existing = races.find(r => r.round === round);
       if (existing && existing.status !== 'upcoming') continue; // Don't overwrite locked/completed
 
+      if (existing && existing.date && existing.date !== race.date) {
+        const picksSnap = await getDocs(picksCol(round));
+        if (!picksSnap.empty) {
+          skipped.push(`Round ${round}: stored ${existing.raceName} (${existing.date}) vs feed ${race.raceName} (${race.date}) — has picks`);
+          continue;
+        }
+      }
+
       batch.set(raceRef(race.round), {
-        round: parseInt(race.round),
+        round,
         raceName: race.raceName,
         circuitName: race.Circuit?.circuitName || '',
         locality: race.Circuit?.Location?.locality || '',
@@ -1870,14 +1971,31 @@ document.getElementById('admin-fetch-schedule').addEventListener('click', async 
         results: existing?.results || [],
         createdAt: serverTimestamp()
       }, { merge: true });
+      writes++;
     }
-    await batch.commit();
+    if (writes > 0) await batch.commit();
     await loadRaces();
+    await checkCalendarDrift();
     renderAdminRaces();
+
+    const extra = races.filter(r => r.round > maxFeedRound);
+    const extraLines = extra.map(r => `Round ${r.round}: ${r.raceName} (${r.date || 'no date'}) is numbered higher than the feed's last round (${maxFeedRound}) and was left in place.`);
+    const parts = [];
+    if (skipped.length) {
+      parts.push('Skipped rounds with picks whose dates differ from the feed:\n' + skipped.join('\n'));
+    }
+    if (extraLines.length) {
+      parts.push(extraLines.join('\n'));
+    }
+    if (parts.length) {
+      setAdminMessage(parts.join('\n\n'), 'error');
+    } else {
+      setAdminMessage('Schedule refreshed from API.', 'success');
+    }
     btn.textContent = 'Refresh Schedule from API';
     btn.disabled = false;
   } catch (e) {
-    alert('Error: ' + e.message);
+    setAdminMessage('Error: ' + e.message, 'error');
     btn.textContent = 'Refresh Schedule from API';
     btn.disabled = false;
   }
